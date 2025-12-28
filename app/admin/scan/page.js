@@ -2,23 +2,65 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, QrCode, Search, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react';
-// import { QrReader } from 'react-qr-reader'; // Commented out to prevent build errors until confirmed working. Using manual input simulation for now.
+import { Scanner } from '@yudiel/react-qr-scanner';
 
 export default function QRScanPage() {
     const [scanResult, setScanResult] = useState(null);
     const [manualCode, setManualCode] = useState('');
     const [isScanning, setIsScanning] = useState(true);
 
-    const handleScan = (data) => {
-        if (data) {
-            setScanResult({
-                status: Math.random() > 0.3 ? 'VALID' : (Math.random() > 0.5 ? 'USED' : 'INVALID'),
-                ticketId: data,
-                name: "John Doe",
-                type: "VIP",
-                email: "john@example.com"
+    const handleScan = async (data) => {
+        if (!data || !isScanning) return; // Only process if data exists and scanner is active
+        setIsScanning(false); // Temporarily disable scanning to prevent multiple scans
+
+        try {
+            let ticketId = data;
+            // Handle legacy booking format "type:booking|id:..." or direct ticketId
+            if (data.includes('type:booking')) {
+                const parts = data.split('|');
+                const idPart = parts.find(p => p.startsWith('id:'));
+                if (idPart) {
+                    ticketId = idPart.split(':')[1];
+                }
+            }
+            // Support AS2026 format too
+
+            const response = await fetch('/api/tickets/validate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ticketId }),
             });
-            setIsScanning(false);
+
+            const result = await response.json();
+
+            if (result.status === 'INVALID') {
+                setScanResult({
+                    status: 'INVALID',
+                    ticketId: ticketId,
+                    name: "Unknown",
+                    type: "Unknown",
+                    email: "N/A"
+                });
+            } else {
+                // VALID or USED
+                setScanResult({
+                    status: result.status,
+                    ticketId: result.ticket.ticketId,
+                    name: result.ticket.fullName || result.ticket.contactName, // Support both models if needed, but we standardized on EventTicket
+                    type: result.ticket.ticketType || result.ticket.standType,
+                    email: result.ticket.email,
+                    orgName: result.ticket.orgName // Only for stands
+                });
+            }
+        } catch (error) {
+            console.error("Scan Validation Error:", error);
+            setScanResult({
+                status: 'INVALID',
+                ticketId: data,
+                name: "Error",
+                type: "System Error",
+                email: "N/A"
+            });
         }
     };
 
@@ -67,8 +109,28 @@ export default function QRScanPage() {
                             </div>
                             <p className="absolute bottom-6 left-0 w-full text-center text-xs font-bold text-text-muted uppercase tracking-widest">Align QR Code within frame</p>
 
-                            {/* Simulated Camera Feed */}
-                            <div className="w-full h-full bg-white/5 animate-pulse"></div>
+                            {/* Real Camera Feed */}
+                            <div className="absolute inset-0 z-0">
+                                <Scanner
+                                    onScan={(result) => {
+                                        if (result && result.length > 0) {
+                                            handleScan(result[0].rawValue);
+                                        }
+                                    }}
+                                    onError={(error) => console.log(error?.message)}
+                                    components={{
+                                        audio: false,
+                                        onOff: false,
+                                        torch: false,
+                                        zoom: false,
+                                        finder: false
+                                    }}
+                                    styles={{
+                                        container: { width: '100%', height: '100%' },
+                                        video: { width: '100%', height: '100%', objectFit: 'cover' }
+                                    }}
+                                />
+                            </div>
                         </div>
 
                         {/* Manual Entry */}
@@ -89,8 +151,8 @@ export default function QRScanPage() {
                     /* Result Card */
                     <div className="w-full max-w-md glass-panel p-8 rounded-[40px] border border-white/10 text-center animate-fade-in-up">
                         <div className={`w-24 h-24 rounded-full mx-auto mb-6 flex items-center justify-center border-4 ${scanResult.status === 'VALID' ? 'bg-green-500/10 border-green-500 text-green-500' :
-                                scanResult.status === 'USED' ? 'bg-blue-500/10 border-blue-500 text-blue-500' :
-                                    'bg-red-500/10 border-red-500 text-red-500'
+                            scanResult.status === 'USED' ? 'bg-blue-500/10 border-blue-500 text-blue-500' :
+                                'bg-red-500/10 border-red-500 text-red-500'
                             }`}>
                             {scanResult.status === 'VALID' && <CheckCircle2 size={40} />}
                             {scanResult.status === 'USED' && <AlertTriangle size={40} />}
@@ -98,8 +160,8 @@ export default function QRScanPage() {
                         </div>
 
                         <h2 className={`text-3xl font-black italic tracking-tighter mb-2 ${scanResult.status === 'VALID' ? 'text-green-500' :
-                                scanResult.status === 'USED' ? 'text-blue-500' :
-                                    'text-red-500'
+                            scanResult.status === 'USED' ? 'text-blue-500' :
+                                'text-red-500'
                             }`}>
                             TICKET {scanResult.status}
                         </h2>

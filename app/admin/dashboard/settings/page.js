@@ -20,14 +20,36 @@ export default function SettingsPage() {
         }));
     };
 
-    const handleSendAnnouncement = (e) => {
+    const handleSendAnnouncement = async (e) => {
         e.preventDefault();
         setIsSending(true);
-        setTimeout(() => {
+
+        try {
+            const response = await fetch('/api/popups', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    title: 'Admin Announcement',
+                    body: announcement,
+                    targetPage: 'all',
+                    duration: 8000
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to send announcement');
+            }
+
             alert('Announcement broadcasted to all users!');
             setAnnouncement('');
+        } catch (error) {
+            console.error('Error sending announcement:', error);
+            alert('Failed to send announcement. Please try again.');
+        } finally {
             setIsSending(false);
-        }, 1500);
+        }
     };
 
     return (

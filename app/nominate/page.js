@@ -29,11 +29,26 @@ export default function NominationPage() {
         e.preventDefault();
         setStatus('SUBMITTING');
 
-        // Simulate API call
-        setTimeout(() => {
-            setStatus('SUCCESS');
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-        }, 1500);
+        const formDataObj = new FormData();
+        Object.keys(formData).forEach(key => formDataObj.append(key, formData[key]));
+
+        try {
+            // Dynamically import action to avoid client-side bundling issues if any
+            const { submitNomination } = await import('./actions');
+            const result = await submitNomination(formDataObj);
+
+            if (result.success) {
+                setStatus('SUCCESS');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            } else {
+                alert(result.error || 'Something went wrong');
+                setStatus('IDLE');
+            }
+        } catch (error) {
+            console.error(error);
+            alert('An unexpected error occurred');
+            setStatus('IDLE');
+        }
     };
 
     if (status === 'SUCCESS') {

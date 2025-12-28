@@ -1,29 +1,86 @@
-"use client";
 import React from 'react';
 import StatsCard from '@/components/StatsCard';
 import ActivityLog from '@/components/ActivityLog';
+import DashboardCharts from '@/components/DashboardCharts';
 import { Users, Ticket, BarChart3, TrendingUp, DollarSign } from 'lucide-react';
-import {
-    BarChart,
-    Bar,
-    XAxis,
-    YAxis,
-    CartesianGrid,
-    Tooltip,
-    ResponsiveContainer
-} from "recharts";
+import prisma from "@/lib/prisma";
 
-export default function AdminDashboard() {
-    // Mock Data for Charts
-    const data = [
-        { name: "Mon", votes: 400 },
-        { name: "Tue", votes: 300 },
-        { name: "Wed", votes: 200 },
-        { name: "Thu", votes: 278 },
-        { name: "Fri", votes: 189 },
-        { name: "Sat", votes: 239 },
-        { name: "Sun", votes: 349 },
-    ];
+// Force dynamic rendering to ensure real-time data
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
+async function getDashboardData() {
+    try {
+        // Run queries in parallel
+        // Note: We use standard prisma calls for models that were ALREADY in the client
+        // We only need raw SQL for NEW models like Activity and Speaker if the client hasn't been regenerated.
+        const [
+            totalTickets,
+            totalUsers,
+            totalNominees,
+            votes,
+            ticketsWithPrice
+        ] = await Promise.all([
+            prisma.ticket.count(),
+            prisma.user.count(),
+            prisma.nominee.count({ where: { isVisible: true } }),
+            prisma.vote.findMany({ select: { createdAt: true } }),
+            prisma.ticket.findMany({
+                include: { category: true }
+            })
+        ]);
+
+        // Fetch activities using Raw SQL workaround
+        let activities = [];
+        try {
+            activities = await prisma.$queryRawUnsafe(
+                `SELECT * FROM "Activity" ORDER BY "createdAt" DESC LIMIT 10`
+            );
+        } catch (e) {
+            console.error("Failed to fetch activities via Raw SQL:", e);
+        }
+
+        // Calculate Revenue
+        const totalRevenue = ticketsWithPrice.reduce((sum, t) => sum + (t.category.price || 0), 0);
+
+        // Process Vote Data for Chart (Group by Day)
+        const votesByDay = votes.reduce((acc, vote) => {
+            const date = new Date(vote.createdAt).toLocaleDateString('en-US', { weekday: 'short' });
+            acc[date] = (acc[date] || 0) + 1;
+            return acc;
+        }, {});
+
+        const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+        const chartData = days.map(day => ({
+            name: day,
+            votes: votesByDay[day] || 0
+        }));
+
+        return {
+            totalTickets,
+            totalUsers,
+            totalNominees,
+            totalRevenue,
+            totalVotes: votes.length,
+            chartData,
+            activities
+        };
+    } catch (error) {
+        console.error("Failed to fetch dashboard stats:", error);
+        return {
+            totalTickets: 0,
+            totalUsers: 0,
+            totalNominees: 0,
+            totalRevenue: 0,
+            totalVotes: 0,
+            chartData: [],
+            activities: []
+        };
+    }
+}
+
+export default async function AdminDashboard() {
+    const data = await getDashboardData();
 
     return (
         <div className="space-y-8">
@@ -43,89 +100,48 @@ export default function AdminDashboard() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <StatsCard
                     title="Total Revenue"
-                    value="$124,500"
+                    value={`₦${data.totalRevenue.toLocaleString()}`}
                     icon={DollarSign}
                     trend="up"
-                    trendValue="+12.5%"
+                    trendValue="+0%"
                     color="bg-primary-copper"
                 />
                 <StatsCard
                     title="Tickets Sold"
-                    value="1,240"
+                    value={data.totalTickets.toLocaleString()}
                     icon={Ticket}
                     trend="up"
-                    trendValue="+8.2%"
+                    trendValue="+0"
                     color="bg-blue-500"
                 />
                 <StatsCard
                     title="Total Votes"
-                    value="45,231"
+                    value={data.totalVotes.toLocaleString()}
                     icon={BarChart3}
                     trend="up"
-                    trendValue="+24.3%"
+                    trendValue="+0"
                     color="bg-purple-500"
                 />
                 <StatsCard
                     title="Nominees"
-                    value="156"
+                    value={data.totalNominees.toLocaleString()}
                     icon={Users}
-                    trend="down"
-                    trendValue="-2"
+                    trend="up"
+                    trendValue="+0"
                     color="bg-orange-500"
                 />
             </div>
 
             {/* Middle Section: Charts & Activity */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 h-[500px]">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {/* Voting Trends Chart */}
-                <div className="lg:col-span-2 glass-panel rounded-3xl p-8 border border-white/5 flex flex-col">
-                    <div className="flex justify-between items-center mb-6">
-                        <h3 className="text-text-muted text-xs font-bold uppercase tracking-wider">Voting Trends (Last 7 Days)</h3>
-                        <div className="flex gap-2">
-                            <span className="w-3 h-3 rounded-full bg-primary-copper"></span>
-                            <span className="text-[10px] text-text-muted">Votes Cast</span>
-                        </div>
-                    </div>
-                    <div className="flex-1 w-full min-h-0">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <BarChart
-                                data={data}
-                                margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
-                            >
-                                <CartesianGrid strokeDasharray="3 3" opacity={0.1} vertical={false} />
-                                <XAxis
-                                    dataKey="name"
-                                    stroke="#525252"
-                                    fontSize={12}
-                                    tickLine={false}
-                                    axisLine={false}
-                                />
-                                <YAxis
-                                    stroke="#525252"
-                                    fontSize={12}
-                                    tickLine={false}
-                                    axisLine={false}
-                                    tickFormatter={(value) => `${value}`}
-                                />
-                                <Tooltip
-                                    contentStyle={{ backgroundColor: '#0a0a0a', border: '1px solid #333', borderRadius: '12px' }}
-                                    itemStyle={{ color: '#fff' }}
-                                    cursor={{ fill: 'rgba(255,255,255,0.05)' }}
-                                />
-                                <Bar
-                                    dataKey="votes"
-                                    fill="#D2A478"
-                                    radius={[4, 4, 0, 0]}
-                                    barSize={40}
-                                />
-                            </BarChart>
-                        </ResponsiveContainer>
-                    </div>
+                <div className="lg:col-span-2">
+                    <DashboardCharts data={data.chartData} />
                 </div>
 
                 {/* Activity Feed */}
-                <div className="lg:col-span-1 h-full min-h-0">
-                    <ActivityLog />
+                <div className="lg:col-span-1 min-h-[450px]">
+                    <ActivityLog activities={data.activities} />
                 </div>
             </div>
         </div>

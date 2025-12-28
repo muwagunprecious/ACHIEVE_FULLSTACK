@@ -14,11 +14,19 @@ export default function StandBookingModal({ onClose }) {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSuccess, setIsSuccess] = useState(false);
 
+    // Lock body scroll when modal is open
+    React.useEffect(() => {
+        document.body.style.overflow = 'hidden';
+        return () => {
+            document.body.style.overflow = 'unset';
+        };
+    }, []);
+
     const handleSubmit = (e) => {
         e.preventDefault();
         setIsSubmitting(true);
 
-        setTimeout(() => {
+        setTimeout(async () => {
             const bookingId = 'BK-' + Math.random().toString(36).substr(2, 6).toUpperCase();
             const bookingData = {
                 ...formData,
@@ -27,20 +35,26 @@ export default function StandBookingModal({ onClose }) {
                 submissionDate: new Date().toLocaleDateString()
             };
 
-            const existingBookings = JSON.parse(localStorage.getItem('achievers_bookings') || '[]');
-            existingBookings.push(bookingData);
-            localStorage.setItem('achievers_bookings', JSON.stringify(existingBookings));
+            try {
+                // Import api client at component level if needed
+                const { default: api } = await import('@/lib/api');
+                await api.createBooking(bookingData);
 
-            setIsSubmitting(false);
+                setIsSubmitting(false);
 
-            // Redirect to confirmation page
-            const params = new URLSearchParams({
-                id: bookingId,
-                org: formData.orgName,
-                type: formData.standType,
-                contact: formData.contactName
-            });
-            window.location.href = `/booking-confirmation?${params.toString()}`;
+                // Redirect to confirmation page
+                const params = new URLSearchParams({
+                    id: bookingId,
+                    org: formData.orgName,
+                    type: formData.standType,
+                    contact: formData.contactName
+                });
+                window.location.href = `/booking-confirmation?${params.toString()}`;
+            } catch (error) {
+                console.error("Booking Error:", error);
+                alert("Failed to submit booking request. Please try again.");
+                setIsSubmitting(false);
+            }
         }, 2000);
     };
 

@@ -8,18 +8,8 @@ import {
 
 export default function DashboardLayout({ children }) {
     const router = useRouter();
-    const [isAuthorized, setIsAuthorized] = useState(false);
+    // Auth handled by parent layout and middleware
 
-    useEffect(() => {
-        const session = localStorage.getItem('achievers_admin_session');
-        if (!session) {
-            router.push('/admin/login');
-        } else {
-            setIsAuthorized(true);
-        }
-    }, [router]);
-
-    if (!isAuthorized) return null;
 
     return (
         <div className="flex flex-col w-full">

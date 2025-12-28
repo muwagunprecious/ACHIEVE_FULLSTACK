@@ -1,59 +1,30 @@
 "use client";
-import React, { useRef } from 'react';
-import { ChevronLeft, ChevronRight, Share2, Linkedin } from 'lucide-react';
-
-const speakers = [
-    {
-        name: 'John Adewale',
-        role: 'Leadership Strategist',
-        org: 'Global Lead Africa',
-        image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600&h=600&fit=crop'
-    },
-    {
-        name: 'Maria Thompson',
-        role: 'Global Business Coach',
-        org: 'Thompson Advisory',
-        image: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=600&h=600&fit=crop'
-    },
-    {
-        name: 'Thami Nkadi',
-        role: 'Communication Architect',
-        org: 'Nkadi Communications',
-        image: 'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?w=600&h=600&fit=crop'
-    },
-    {
-        name: 'Peter Greenberg',
-        role: 'Media & Strategy Expert',
-        org: 'CBS News',
-        image: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=600&h=600&fit=crop'
-    },
-    {
-        name: 'Aisha Bello',
-        role: 'Innovation & Policy Advocate',
-        org: 'Future Africa Lab',
-        image: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=600&h=600&fit=crop'
-    }
-];
+import React, { useRef, useState, useEffect } from 'react';
+import { ChevronLeft, ChevronRight, Share2, Linkedin, User } from 'lucide-react';
 
 export default function Speakers() {
-    const [speakersList, setSpeakersList] = React.useState([]);
+    const [speakersList, setSpeakersList] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
     const scrollRef = useRef(null);
 
-    React.useEffect(() => {
-        const stored = localStorage.getItem('achievers_speakers');
-        if (stored) {
-            setSpeakersList(JSON.parse(stored));
-        } else {
-            // Initial faculty if none in storage
-            const initial = [
-                { id: '1', name: 'Dr. John Adewale', role: 'Leadership Strategist', org: 'Global Lead Africa', image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600&h=600&fit=crop' },
-                { id: '2', name: 'Maria Thompson', role: 'Global Business Coach', org: 'Thompson Advisory', image: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=600&h=600&fit=crop' },
-                { id: '3', name: 'Aliko Dangote', role: 'President, Dangote Group', org: 'Dangote Group', image: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Dangote' },
-                { id: '4', name: 'Ngozi Okonjo-Iweala', role: 'Director-General', org: 'WTO', image: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Ngozi' }
-            ];
-            setSpeakersList(initial);
-            localStorage.setItem('achievers_speakers', JSON.stringify(initial));
-        }
+    useEffect(() => {
+        const fetchSpeakers = async () => {
+            try {
+                const response = await fetch('/api/speakers');
+                if (response.ok) {
+                    const data = await response.json();
+                    setSpeakersList(data);
+                } else {
+                    console.error("Speakers API returned error:", response.status);
+                }
+            } catch (error) {
+                console.error("Failed to fetch speakers from API:", error);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchSpeakers();
     }, []);
 
     const scroll = (direction) => {
@@ -68,8 +39,29 @@ export default function Speakers() {
         }
     };
 
+    if (isLoading) {
+        return (
+            <section id="speakers" className="section-sm bg-midnight-obsidian py-24">
+                <div className="container text-center">
+                    <div className="animate-pulse flex flex-col items-center">
+                        <div className="h-4 w-32 bg-white/10 rounded mb-4"></div>
+                        <div className="h-12 w-64 bg-white/10 rounded mb-8"></div>
+                    </div>
+                </div>
+            </section>
+        );
+    }
+
+    // Default faculty if none in DB
+    const displayList = speakersList.length > 0 ? speakersList : [
+        { id: '1', name: 'Dr. John Adewale', title: 'Leadership Strategist', bio: 'Global Lead Africa', image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600&h=600&fit=crop' },
+        { id: '2', name: 'Maria Thompson', title: 'Global Business Coach', bio: 'Thompson Advisory', image: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=600&h=600&fit=crop' },
+        { id: '3', name: 'Aliko Dangote', title: 'President, Dangote Group', bio: 'Dangote Group', image: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Dangote' },
+        { id: '4', name: 'Ngozi Okonjo-Iweala', title: 'Director-General', bio: 'WTO', image: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Ngozi' }
+    ];
+
     return (
-        <section id="speakers" className="section-sm bg-midnight-obsidian overflow-hidden">
+        <section id="speakers" className="section-sm bg-midnight-obsidian overflow-hidden py-24">
             <div className="container relative">
                 <div className="flex flex-col items-center text-center mb-16 gap-8">
                     <div className="max-w-3xl mx-auto">
@@ -94,23 +86,29 @@ export default function Speakers() {
                     ref={scrollRef}
                     className="flex gap-8 overflow-x-auto pb-12 snap-x no-scrollbar"
                 >
-                    {speakersList.map((speaker, index) => (
-                        <div key={index} className="speaker-card snap-start">
-                            <div className="relative group overflow-hidden rounded-[32px] aspect-[10/13] mb-6 bg-midnight-black">
-                                <img
-                                    src={speaker.image}
-                                    alt={speaker.name}
-                                    className="w-full h-full object-cover grayscale transition-all duration-1000 group-hover:scale-110 group-hover:grayscale-0 opacity-60 group-hover:opacity-100"
-                                />
+                    {displayList.map((speaker, index) => (
+                        <div key={speaker.id || index} className="speaker-card snap-start">
+                            <div className="relative group overflow-hidden rounded-[32px] aspect-[10/13] mb-6 bg-midnight-black border border-white/5">
+                                {speaker.image ? (
+                                    <img
+                                        src={speaker.image}
+                                        alt={speaker.name}
+                                        className="w-full h-full object-cover grayscale transition-all duration-1000 group-hover:scale-110 group-hover:grayscale-0 opacity-60 group-hover:opacity-100"
+                                    />
+                                ) : (
+                                    <div className="w-full h-full flex items-center justify-center text-white/20">
+                                        <User size={64} />
+                                    </div>
+                                )}
 
                                 {/* Social Overlay */}
                                 <div className="absolute bottom-4 right-4 flex flex-col gap-2 translate-y-20 group-hover:translate-y-0 opacity-0 group-hover:opacity-100 transition-all duration-700">
-                                    <a href="#" className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-midnight-black hover:bg-primary-copper hover:text-white transition-all duration-300">
+                                    <a href={speaker.linkedin || "#"} target="_blank" className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-midnight-black hover:bg-primary-copper hover:text-white transition-all duration-300">
                                         <Linkedin size={18} />
                                     </a>
-                                    <a href="#" className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-midnight-black hover:bg-primary-copper hover:text-white transition-all duration-300">
+                                    <button className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-midnight-black hover:bg-primary-copper hover:text-white transition-all duration-300">
                                         <Share2 size={18} />
-                                    </a>
+                                    </button>
                                 </div>
 
                                 <div className="absolute inset-0 bg-gradient-to-t from-midnight-black via-transparent to-transparent opacity-60"></div>
@@ -118,8 +116,8 @@ export default function Speakers() {
 
                             <div className="text-center">
                                 <h3 className="text-xl font-black text-white mb-1 uppercase tracking-tighter italic">{speaker.name}</h3>
-                                <p className="text-primary-copper font-bold text-[9px] tracking-[0.2em] uppercase mb-1">{speaker.role}</p>
-                                <p className="text-text-muted text-[10px] font-medium uppercase tracking-[0.1em]">{speaker.org || speaker.bio}</p>
+                                <p className="text-primary-copper font-bold text-[9px] tracking-[0.2em] uppercase mb-1">{speaker.title}</p>
+                                <p className="text-text-muted text-[10px] font-medium uppercase tracking-[0.1em] line-clamp-2">{speaker.bio}</p>
                             </div>
                         </div>
                     ))}
@@ -141,6 +139,13 @@ export default function Speakers() {
                 }
                 .bg-midnight-obsidian { background-color: var(--midnight-obsidian); }
                 .text-primary-copper { color: var(--primary-copper); }
+                .no-scrollbar::-webkit-scrollbar {
+                    display: none;
+                }
+                .no-scrollbar {
+                    -ms-overflow-style: none;
+                    scrollbar-width: none;
+                }
             `}</style>
         </section>
     );

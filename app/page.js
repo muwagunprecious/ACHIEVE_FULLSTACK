@@ -1,41 +1,32 @@
 "use client";
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import Navbar from '../components/Navbar';
 import Hero from '../components/Hero';
 import Speakers from '../components/Speakers';
 import ExhibitionStand from '../components/ExhibitionStand';
-import StandBookingModal from '../components/StandBookingModal';
 import Tickets from '../components/Tickets';
-import CheckoutModal from '../components/CheckoutModal';
 import TicketResult from '../components/TicketResult';
 import FindTicket from '../components/FindTicket';
 import Footer from '../components/Footer';
 
+const StandBookingModal = dynamic(() => import('../components/StandBookingModal'), { ssr: false });
+const CheckoutModal = dynamic(() => import('../components/CheckoutModal'), { ssr: false });
+
 export default function Home() {
+  const router = useRouter();
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
-  const [purchasedTicket, setPurchasedTicket] = useState(null);
-  const [view, setView] = useState('home'); // 'home' or 'result'
 
   const handleBuy = (ticket) => {
     setSelectedTicket(ticket);
   };
 
   const handleComplete = (ticketData) => {
-    setPurchasedTicket(ticketData);
-    setSelectedTicket(null);
-    setView('result');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    // Redirect to the dedicated ticket result page
+    router.push(`/ticket-confirmation?id=${ticketData.ticketId}`);
   };
-
-  const handleBackToHome = () => {
-    setView('home');
-    setPurchasedTicket(null);
-  };
-
-  if (view === 'result') {
-    return <TicketResult ticketData={purchasedTicket} onBack={handleBackToHome} />;
-  }
 
   return (
     <main className="min-h-screen bg-bg-deep">
@@ -128,6 +119,7 @@ export default function Home() {
 
       {selectedTicket && (
         <CheckoutModal
+          isOpen={true}
           ticket={selectedTicket}
           onClose={() => setSelectedTicket(null)}
           onComplete={handleComplete}
