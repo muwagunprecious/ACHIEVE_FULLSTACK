@@ -109,7 +109,7 @@ export default function Tickets({ onBuy }) {
                                 <button
                                     onClick={() => active && onBuy(ticket)}
                                     disabled={!active}
-                                    className={`btn w-full !py-4 transition-all duration-500 ${ticket.popular && active ? 'btn-primary shadow-lg shadow-primary-copper/20' : 'btn-outline border-white/10 hover:border-white disabled:opacity-50 disabled:cursor-not-allowed'}`}
+                                    className={`btn w-full !py-4 transition-all duration-500 ${isPopular && active ? 'btn-primary shadow-lg shadow-primary-copper/20' : 'btn-outline border-white/10 hover:border-white disabled:opacity-50 disabled:cursor-not-allowed'}`}
                                 >
                                     <span className="tracking-[0.2em]">{active ? 'GET MY TICKET' : 'Locked'}</span>
                                 </button>
