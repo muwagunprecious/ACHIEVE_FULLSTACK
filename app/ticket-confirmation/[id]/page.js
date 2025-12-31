@@ -1,15 +1,15 @@
 "use client";
 import React, { Suspense, useEffect, useState } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import TicketResult from '@/components/TicketResult';
 
 function TicketConfirmationContent() {
-    const searchParams = useSearchParams();
+    const params = useParams();
     const router = useRouter();
     const [ticket, setTicket] = useState(null);
     const [loading, setLoading] = useState(true);
 
-    const ticketId = searchParams.get('id');
+    const ticketId = params.id;
 
     useEffect(() => {
         if (!ticketId) {
@@ -58,8 +58,6 @@ function TicketConfirmationContent() {
 
 export default function TicketConfirmationPage() {
     return (
-        <Suspense fallback={<div className="min-h-screen bg-[#050505]"></div>}>
-            <TicketConfirmationContent />
-        </Suspense>
+        <TicketConfirmationContent />
     );
 }

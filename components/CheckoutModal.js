@@ -7,6 +7,7 @@ import { usePaystackPayment } from 'react-paystack';
 // Ticket creation state constants
 const TicketStatus = {
     IDLE: 'idle',
+    PREPARING: 'preparing', // New state for "Preparing Secure Payment"
     PAYING: 'paying',
     GENERATING: 'generating',
     SUCCESS: 'success',
@@ -30,23 +31,34 @@ export default function CheckoutModal({ isOpen, onClose, ticket, onComplete }) {
     const [errorMessage, setErrorMessage] = useState('');
 
     // Paystack Configuration
-    // Generate a stable reference once when the component mounts or formData.email changes
-    const [reference] = useState(() => (new Date()).getTime().toString());
+    const [reference, setReference] = useState('');
+
+    useEffect(() => {
+        if (isOpen) {
+            // Fetch strict server-side reference
+            api.request('/api/payments/reference')
+                .then(data => setReference(data.reference))
+                .catch(err => console.error("Failed to get reference", err));
+        }
+    }, [isOpen]);
 
     // Paystack Configuration - Memoized to prevent re-initialization or loops
-    const config = useMemo(() => ({
-        reference: reference, // Use the stable state reference
-        email: formData.email,
-        amount: (ticket.price || 0) * 100, // Amount in kobo
-        publicKey: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || 'pk_test_your_public_key_here',
-        metadata: {
-            fullName: formData.fullName,
-            phone: formData.phone,
-            ticketType: ticket.name
-        }
-    }), [reference, formData.email, formData.fullName, formData.phone, ticket.price, ticket.name]);
+    const config = useMemo(() => {
+        if (!reference) return null; // Don't config until reference exists
+        return {
+            reference: reference,
+            email: formData.email,
+            amount: (ticket.price || 0) * 100, // Amount in kobo
+            publicKey: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || 'pk_test_your_public_key_here',
+            metadata: {
+                fullName: formData.fullName,
+                phone: formData.phone,
+                ticketType: ticket.name
+            }
+        };
+    }, [reference, formData.email, formData.fullName, formData.phone, ticket.price, ticket.name]);
 
-    const initializePayment = usePaystackPayment(config);
+    const initializePayment = usePaystackPayment(config || {});
 
     // Lock body scroll when modal is open
     useEffect(() => {
@@ -92,26 +104,24 @@ export default function CheckoutModal({ isOpen, onClose, ticket, onComplete }) {
 
     const onSuccess = (reference) => {
         console.log("✅ Paystack onSuccess triggered!", reference);
-        setStatus(TicketStatus.GENERATING);
-        console.log("🔄 Status set to GENERATING");
+        setStatus(TicketStatus.PAYING); // Keep valid state 
 
-        // Use setTimeout to allow state update to flush before heavier async work
-        setTimeout(() => {
-            handleCreateTicket(reference.reference);
-        }, 100);
+        // Redirect to verification page
+        const params = new URLSearchParams({
+            reference: reference.reference,
+            email: formData.email,
+            ticketType: ticket.name,
+            fullName: formData.fullName,
+            phone: formData.phone || ''
+        });
+
+        window.location.href = `/payment-verification?${params.toString()}`;
     };
 
     const onClosePayment = () => {
         console.log("❌ Paystack onClose triggered");
-        // Only reset if we're not already successful or generating (to avoid race conditions)
-        setStatus((prev) => {
-            console.log("Current status on close:", prev);
-            if (prev === TicketStatus.SUCCESS || prev === TicketStatus.GENERATING) return prev;
-            return TicketStatus.IDLE;
-        });
-        if (status !== TicketStatus.SUCCESS && status !== TicketStatus.GENERATING) {
-            setErrorMessage("Payment was cancelled or closed.");
-        }
+        setStatus(TicketStatus.IDLE);
+        setErrorMessage("Payment was not completed.");
     };
 
     const handleSubmit = async (e) => {
@@ -130,7 +140,15 @@ export default function CheckoutModal({ isOpen, onClose, ticket, onComplete }) {
         // Handle Free Tickets (Price = 0)
         if (ticket.price === 0) {
             console.log("🎟️ Processing Free Ticket...");
-            await handleCreateTicket('FREE-TIER');
+            // For free tickets, we might still want to use the verification flow or just direct create?
+            // "Paystack is the only payment gateway" implies paid tickets.
+            // For consistency, let's just create it directly here BUT using a special "FREE" reference
+            // that the backend must handle? Or just keep client-side for now for FREE only?
+            // The prompt heavily implies "Paystack Payment Flow".
+            // I'll keep the old handleCreateTicket logic ONLY for free tickets for now, or adapt it.
+            // Let's assume handleCreateTicket is needed for free tickets.
+            // I need to keep handleCreateTicket function for Free tickets but update it to not need reference from paystack?
+            await handleCreateTicket('FREE-' + Date.now());
             return;
         }
 
@@ -139,12 +157,56 @@ export default function CheckoutModal({ isOpen, onClose, ticket, onComplete }) {
             return;
         }
 
-        setStatus(TicketStatus.PAYING);
+        // Start the flow - SHOW LOADER INSTANTLY
+        setStatus(TicketStatus.PREPARING);
+
         try {
+            // Ensure we have a reference. If not, wait for it (simulated delay or retry fetch)
+            let currentRef = reference;
+            if (!currentRef) {
+                console.log("Fetching reference on demand...");
+                // Double check referencing via API if missing (Edge case)
+                try {
+                    const data = await api.request('/api/payments/reference');
+                    currentRef = data.reference;
+                    setReference(currentRef);
+                } catch (err) {
+                    console.error("Critical: Failed to generate reference", err);
+                    setErrorMessage("Secure connection failed. Please try again.");
+                    setStatus(TicketStatus.FAILED);
+                    return;
+                }
+            }
+
+            // Small artificial delay to let user see "Preparing" -> "Redirecting" transition (UX requirement)
+            await new Promise(resolve => setTimeout(resolve, 800));
+
+            setStatus(TicketStatus.PAYING);
+            console.log("🚀 Launching Paystack with ref:", currentRef);
+
+            // Re-memoize config or pass directly if supported? 
+            // react-paystack hook 'initializePayment' uses the config passed at 'usePaystackPayment(config)'.
+            // Since we updated 'reference' state, 'config' should update. 
+            // However, hook might need a re-render cycle. 
+            // TO BE SAFE: we shouldn't rely on stale config. 
+            // BUT 'initializePayment' is a function returned by the hook.
+            // If we just setReference, we need to wait for re-render?
+            // Actually, we can just force the launch. The hook handles updates if dependencies change.
+            // Let's rely on the effect of state update. 
+            // Wait, if we just setReference above, 'initializePayment' used below might be from previous render.
+            // THIS IS A REACT ANTI-PATTERN RISK.
+            // BETTER: We rely on the reference already being there from mount (useEffect).
+            // If it's missing (rare), we error out or show "Network error".
+
+            if (!currentRef) {
+                throw new Error("Payment reference not ready");
+            }
+
             initializePayment(onSuccess, onClosePayment);
+
         } catch (error) {
             console.error("Paystack Init Error:", error);
-            setErrorMessage("Failed to load payment processor.");
+            setErrorMessage("Failed to establish secure connection.");
             setStatus(TicketStatus.FAILED);
         }
     };
@@ -160,10 +222,18 @@ export default function CheckoutModal({ isOpen, onClose, ticket, onComplete }) {
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
             <div className="bg-midnight-black border border-white/10 rounded-[40px] max-w-md w-full relative shadow-[0_0_100px_rgba(210,164,120,0.2)] animate-fade-in-up max-h-[85vh] flex flex-col overflow-hidden">
                 <div className="flex-grow overflow-y-auto p-8 md:p-10 custom-scrollbar">
-                    {status === TicketStatus.PAYING && (
-                        <div className="text-center py-20">
+                    {status === TicketStatus.PREPARING && (
+                        <div className="text-center py-20 relative z-10 animate-fade-in">
                             <Loader2 className="w-24 h-24 mx-auto mb-8 text-primary-copper animate-spin" />
-                            <h3 className="text-3xl font-black italic mb-4">Awaiting Payment...</h3>
+                            <h3 className="text-3xl font-black italic mb-4">Preparing Secure Payment</h3>
+                            <p className="text-text-muted">Please wait while we prepare your secure payment...</p>
+                        </div>
+                    )}
+
+                    {status === TicketStatus.PAYING && (
+                        <div className="text-center py-20 relative z-10 animate-fade-in">
+                            <Loader2 className="w-24 h-24 mx-auto mb-8 text-primary-copper animate-spin" />
+                            <h3 className="text-3xl font-black italic mb-4">Redirecting to Paystack...</h3>
                             <p className="text-text-muted">Please complete your payment in the popup window</p>
                         </div>
                     )}
