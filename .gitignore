@@ -41,7 +41,7 @@ yarn-error.log*
 next-env.d.ts
 
 # project specific
-/backend/
+# /backend/
 *.log
 *.txt
 .gemini/
