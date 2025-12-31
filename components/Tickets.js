@@ -85,14 +85,19 @@ export default function Tickets({ onBuy }) {
                                     </div>
                                 )}
 
+                                {active && (
+                                    <div className="absolute -top-4 right-10 bg-primary-copper text-white text-[9px] font-black uppercase tracking-widest px-4 py-1.5 rounded-full shadow-xl shadow-primary-copper/30">
+                                        {ticket.price === 0 ? 'Complimentary' : `₦${ticket.price.toLocaleString()}`}
+                                    </div>
+                                )}
+
                                 <div className="mb-12">
                                     <div className="w-14 h-14 glass-panel flex items-center justify-center text-primary-copper mb-8 group-hover:bg-primary-copper group-hover:text-white transition-all duration-500 rounded-2xl">
                                         {iconMap[ticket.name] || defaultIcon}
                                     </div>
-                                    <h3 className="text-[10px] font-black text-text-muted tracking-[0.3em] uppercase mb-4">{ticket.name}</h3>
-                                    <div className="text-2xl font-black text-primary-copper italic tracking-tighter">
-                                        {ticket.price === 0 ? 'Complimentary' : `₦${ticket.price.toLocaleString()}`}
-                                    </div>
+                                    <h3 className="text-xl font-black text-white italic tracking-tighter uppercase mb-2">
+                                        {ticket.name.replace(' PASS', '')} <span className="text-primary-copper NOT-italic text-[10px] tracking-[0.3em] ml-2">PASS</span>
+                                    </h3>
                                 </div>
 
                                 <div className="flex-grow mb-12">
