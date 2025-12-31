@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { X, CheckCircle, AlertCircle, Loader2, CreditCard } from 'lucide-react';
 import api, { ApiError } from '@/lib/api';
 import { usePaystackPayment } from 'react-paystack';
@@ -7,7 +7,6 @@ import { usePaystackPayment } from 'react-paystack';
 // Ticket creation state constants
 const TicketStatus = {
     IDLE: 'idle',
-    PREPARING: 'preparing', // New state for "Preparing Secure Payment"
     PAYING: 'paying',
     GENERATING: 'generating',
     SUCCESS: 'success',
@@ -32,24 +31,40 @@ export default function CheckoutModal({ isOpen, onClose, ticket, onComplete }) {
 
     // Paystack Configuration
     const [reference, setReference] = useState('');
+    const [isConfigReady, setIsConfigReady] = useState(false);
+
+    // Safety Refs to handle callback closures and race conditions
+    const isSuccessRef = useRef(false);
 
     useEffect(() => {
         if (isOpen) {
-            // Fetch strict server-side reference
+            // Reset state on open
+            setReference('');
+            setIsConfigReady(false);
+            setStatus(TicketStatus.IDLE);
+            setErrorMessage('');
+            isSuccessRef.current = false;
+
+            // Fetch strict server-side reference immediately when modal opens
             api.request('/api/payments/reference')
-                .then(data => setReference(data.reference))
-                .catch(err => console.error("Failed to get reference", err));
+                .then(data => {
+                    console.log("Got reference:", data.reference);
+                    setReference(data.reference);
+                })
+                .catch(err => {
+                    console.error("Failed to get reference", err);
+                    setErrorMessage("Connection failed. Please reopen.");
+                });
         }
     }, [isOpen]);
 
-    // Paystack Configuration - Memoized to prevent re-initialization or loops
+    // Paystack Configuration - Memoized
     const config = useMemo(() => {
-        if (!reference) return null; // Don't config until reference exists
         return {
-            reference: reference,
+            reference: reference || 'pending_ref',
             email: formData.email,
             amount: (ticket.price || 0) * 100, // Amount in kobo
-            publicKey: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || 'pk_test_your_public_key_here',
+            publicKey: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || '',
             metadata: {
                 fullName: formData.fullName,
                 phone: formData.phone,
@@ -58,7 +73,17 @@ export default function CheckoutModal({ isOpen, onClose, ticket, onComplete }) {
         };
     }, [reference, formData.email, formData.fullName, formData.phone, ticket.price, ticket.name]);
 
-    const initializePayment = usePaystackPayment(config || {});
+    // Initialize hook. It updates when config updates.
+    const initializePayment = usePaystackPayment(config);
+
+    // Update ready state
+    useEffect(() => {
+        if (reference && process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY && config.publicKey) {
+            setIsConfigReady(true);
+        } else {
+            setIsConfigReady(false);
+        }
+    }, [reference, config]);
 
     // Lock body scroll when modal is open
     useEffect(() => {
@@ -66,15 +91,15 @@ export default function CheckoutModal({ isOpen, onClose, ticket, onComplete }) {
             document.body.style.overflow = 'hidden';
         } else {
             document.body.style.overflow = 'unset';
+            setStatus(TicketStatus.IDLE);
         }
         return () => {
             document.body.style.overflow = 'unset';
         };
     }, [isOpen]);
 
-    const handleCreateTicket = async (reference) => {
+    const handleCreateTicket = async (ref) => {
         setStatus(TicketStatus.GENERATING);
-
         try {
             const ticketId = 'AS2026-' + Date.now().toString(36).toUpperCase();
             const ticketData = {
@@ -82,17 +107,13 @@ export default function CheckoutModal({ isOpen, onClose, ticket, onComplete }) {
                 ticketType: ticket.name,
                 ticketPrice: ticket.price || 0,
                 ticketId,
-                reference: reference || 'DIRECT-' + ticketId,
+                reference: ref || 'DIRECT-' + ticketId,
                 paymentVerified: true,
                 purchaseDate: new Date().toLocaleDateString()
             };
-
             await api.createTicket(ticketData);
             setStatus(TicketStatus.SUCCESS);
-
-            setTimeout(() => {
-                onComplete(ticketData);
-            }, 500);
+            setTimeout(() => onComplete(ticketData), 1000);
         } catch (error) {
             console.error("❌ Ticket Creation Error:", error);
             setErrorMessage(error instanceof ApiError && error.code === 'NETWORK_ERROR'
@@ -102,9 +123,13 @@ export default function CheckoutModal({ isOpen, onClose, ticket, onComplete }) {
         }
     };
 
+    // Callbacks must be stable or handle refs to avoid stale closures
     const onSuccess = (reference) => {
         console.log("✅ Paystack onSuccess triggered!", reference);
-        setStatus(TicketStatus.PAYING); // Keep valid state 
+        isSuccessRef.current = true;
+
+        // Show success state briefly before redirect
+        setStatus(TicketStatus.SUCCESS);
 
         // Redirect to verification page
         const params = new URLSearchParams({
@@ -115,100 +140,50 @@ export default function CheckoutModal({ isOpen, onClose, ticket, onComplete }) {
             phone: formData.phone || ''
         });
 
-        window.location.href = `/payment-verification?${params.toString()}`;
+        // Forced Redirect after short delay
+        setTimeout(() => {
+            window.location.href = `/payment-verification?${params.toString()}`;
+        }, 300);
     };
 
     const onClosePayment = () => {
-        console.log("❌ Paystack onClose triggered");
+
+        // Check ref to see if we already succeeded
+        if (isSuccessRef.current) {
+            console.log("❌ Paystack onClose triggered BUT ignored success");
+            return;
+        }
+
+        console.log("❌ Paystack onClose triggered - User cancelled");
         setStatus(TicketStatus.IDLE);
-        setErrorMessage("Payment was not completed.");
+        setErrorMessage("Payment cancelled.");
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        isSuccessRef.current = false; // Reset
 
         if (!formData.fullName || !formData.email) {
             alert('Please fill in all required fields');
             return;
         }
 
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-            alert('Please enter a valid email address');
-            return;
-        }
-
-        // Handle Free Tickets (Price = 0)
+        // Free Ticket
         if (ticket.price === 0) {
-            console.log("🎟️ Processing Free Ticket...");
-            // For free tickets, we might still want to use the verification flow or just direct create?
-            // "Paystack is the only payment gateway" implies paid tickets.
-            // For consistency, let's just create it directly here BUT using a special "FREE" reference
-            // that the backend must handle? Or just keep client-side for now for FREE only?
-            // The prompt heavily implies "Paystack Payment Flow".
-            // I'll keep the old handleCreateTicket logic ONLY for free tickets for now, or adapt it.
-            // Let's assume handleCreateTicket is needed for free tickets.
-            // I need to keep handleCreateTicket function for Free tickets but update it to not need reference from paystack?
             await handleCreateTicket('FREE-' + Date.now());
             return;
         }
 
-        if (!process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY === 'pk_test_your_public_key_here') {
-            alert('Paystack Public Key is not configured. Please add it to your .env.local file.');
+        if (!isConfigReady) {
+            alert("Payment system initializing... please wait a moment.");
             return;
         }
 
-        // Start the flow - SHOW LOADER INSTANTLY
-        setStatus(TicketStatus.PREPARING);
+        // We set status to PAYING to show the "Redirecting..." UI
+        setStatus(TicketStatus.PAYING);
 
-        try {
-            // Ensure we have a reference. If not, wait for it (simulated delay or retry fetch)
-            let currentRef = reference;
-            if (!currentRef) {
-                console.log("Fetching reference on demand...");
-                // Double check referencing via API if missing (Edge case)
-                try {
-                    const data = await api.request('/api/payments/reference');
-                    currentRef = data.reference;
-                    setReference(currentRef);
-                } catch (err) {
-                    console.error("Critical: Failed to generate reference", err);
-                    setErrorMessage("Secure connection failed. Please try again.");
-                    setStatus(TicketStatus.FAILED);
-                    return;
-                }
-            }
-
-            // Small artificial delay to let user see "Preparing" -> "Redirecting" transition (UX requirement)
-            await new Promise(resolve => setTimeout(resolve, 800));
-
-            setStatus(TicketStatus.PAYING);
-            console.log("🚀 Launching Paystack with ref:", currentRef);
-
-            // Re-memoize config or pass directly if supported? 
-            // react-paystack hook 'initializePayment' uses the config passed at 'usePaystackPayment(config)'.
-            // Since we updated 'reference' state, 'config' should update. 
-            // However, hook might need a re-render cycle. 
-            // TO BE SAFE: we shouldn't rely on stale config. 
-            // BUT 'initializePayment' is a function returned by the hook.
-            // If we just setReference, we need to wait for re-render?
-            // Actually, we can just force the launch. The hook handles updates if dependencies change.
-            // Let's rely on the effect of state update. 
-            // Wait, if we just setReference above, 'initializePayment' used below might be from previous render.
-            // THIS IS A REACT ANTI-PATTERN RISK.
-            // BETTER: We rely on the reference already being there from mount (useEffect).
-            // If it's missing (rare), we error out or show "Network error".
-
-            if (!currentRef) {
-                throw new Error("Payment reference not ready");
-            }
-
-            initializePayment(onSuccess, onClosePayment);
-
-        } catch (error) {
-            console.error("Paystack Init Error:", error);
-            setErrorMessage("Failed to establish secure connection.");
-            setStatus(TicketStatus.FAILED);
-        }
+        // Call Paystack
+        initializePayment(onSuccess, onClosePayment);
     };
 
     const handleRetry = () => {
@@ -222,19 +197,25 @@ export default function CheckoutModal({ isOpen, onClose, ticket, onComplete }) {
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
             <div className="bg-midnight-black border border-white/10 rounded-[40px] max-w-md w-full relative shadow-[0_0_100px_rgba(210,164,120,0.2)] animate-fade-in-up max-h-[85vh] flex flex-col overflow-hidden">
                 <div className="flex-grow overflow-y-auto p-8 md:p-10 custom-scrollbar">
-                    {status === TicketStatus.PREPARING && (
-                        <div className="text-center py-20 relative z-10 animate-fade-in">
-                            <Loader2 className="w-24 h-24 mx-auto mb-8 text-primary-copper animate-spin" />
-                            <h3 className="text-3xl font-black italic mb-4">Preparing Secure Payment</h3>
-                            <p className="text-text-muted">Please wait while we prepare your secure payment...</p>
-                        </div>
-                    )}
 
                     {status === TicketStatus.PAYING && (
                         <div className="text-center py-20 relative z-10 animate-fade-in">
                             <Loader2 className="w-24 h-24 mx-auto mb-8 text-primary-copper animate-spin" />
-                            <h3 className="text-3xl font-black italic mb-4">Redirecting to Paystack...</h3>
-                            <p className="text-text-muted">Please complete your payment in the popup window</p>
+                            <h3 className="text-3xl font-black italic mb-4">Complete Payment</h3>
+                            <p className="text-text-muted mb-6">Processing your payment in the popup...</p>
+
+                            <div className="flex flex-col gap-3 items-center">
+                                <button
+                                    onClick={() => onSuccess({ reference })}
+                                    className="btn btn-primary px-8 py-3 font-bold text-sm tracking-wider animate-pulse"
+                                >
+                                    I HAVE COMPLETED PAYMENT
+                                </button>
+
+                                <button onClick={onClosePayment} className="text-xs text-white/40 hover:text-white underline mt-2">
+                                    Cancel Transaction
+                                </button>
+                            </div>
                         </div>
                     )}
 
@@ -270,8 +251,7 @@ export default function CheckoutModal({ isOpen, onClose, ticket, onComplete }) {
                         <>
                             <button
                                 onClick={onClose}
-                                disabled={status === TicketStatus.GENERATING || status === TicketStatus.PAYING}
-                                className="absolute top-8 right-8 w-10 h-10 flex items-center justify-center bg-white/5 hover:bg-white/20 rounded-full transition-all text-white border border-white/10 shadow-lg disabled:opacity-50 z-10"
+                                className="absolute top-8 right-8 w-10 h-10 flex items-center justify-center bg-white/5 hover:bg-white/20 rounded-full transition-all text-white border border-white/10 shadow-lg z-10"
                                 title="Close"
                             >
                                 <X size={20} />
@@ -288,29 +268,39 @@ export default function CheckoutModal({ isOpen, onClose, ticket, onComplete }) {
                             <form onSubmit={handleSubmit} className="space-y-6">
                                 <div>
                                     <label className="block text-[10px] font-black uppercase tracking-widest text-text-muted mb-3">Full Name *</label>
-                                    <input type="text" required disabled={status !== TicketStatus.IDLE}
-                                        className="w-full h-14 bg-white/5 border border-white/10 rounded-xl px-6 outline-none text-white focus:border-primary-copper/50 transition-all disabled:opacity-50 font-medium"
+                                    <input type="text" required
+                                        className="w-full h-14 bg-white/5 border border-white/10 rounded-xl px-6 outline-none text-white focus:border-primary-copper/50 transition-all font-medium"
                                         value={formData.fullName} onChange={(e) => setFormData({ ...formData, fullName: e.target.value })} placeholder="John Doe" />
                                 </div>
 
                                 <div>
                                     <label className="block text-[10px] font-black uppercase tracking-widest text-text-muted mb-3">Email Address *</label>
-                                    <input type="email" required disabled={status !== TicketStatus.IDLE}
-                                        className="w-full h-14 bg-white/5 border border-white/10 rounded-xl px-6 outline-none text-white focus:border-primary-copper/50 transition-all disabled:opacity-50 font-medium"
+                                    <input type="email" required
+                                        className="w-full h-14 bg-white/5 border border-white/10 rounded-xl px-6 outline-none text-white focus:border-primary-copper/50 transition-all font-medium"
                                         value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} placeholder="john@example.com" />
                                 </div>
 
                                 <div>
                                     <label className="block text-[10px] font-black uppercase tracking-widest text-text-muted mb-3">Phone Number</label>
-                                    <input type="tel" disabled={status !== TicketStatus.IDLE}
-                                        className="w-full h-14 bg-white/5 border border-white/10 rounded-xl px-6 outline-none text-white focus:border-primary-copper/50 transition-all disabled:opacity-50 font-medium"
+                                    <input type="tel"
+                                        className="w-full h-14 bg-white/5 border border-white/10 rounded-xl px-6 outline-none text-white focus:border-primary-copper/50 transition-all font-medium"
                                         value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} placeholder="+234 XXX XXX XXXX" />
                                 </div>
 
-                                <button type="submit" disabled={status !== TicketStatus.IDLE}
+                                <button type="submit"
+                                    disabled={!isConfigReady}
                                     className="btn btn-primary w-full h-16 text-lg font-black uppercase tracking-widest flex items-center justify-center gap-3 disabled:opacity-50 italic">
-                                    <CreditCard size={24} />
-                                    {status === TicketStatus.PAYING ? "PAYING..." : "PAY & GET TICKET"}
+                                    {isConfigReady ? (
+                                        <>
+                                            <CreditCard size={24} />
+                                            PAY & GET TICKET
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Loader2 className="animate-spin" size={24} />
+                                            INITIALIZING...
+                                        </>
+                                    )}
                                 </button>
 
                                 <p className="text-[10px] text-center text-text-muted font-medium uppercase tracking-widest opacity-50">
