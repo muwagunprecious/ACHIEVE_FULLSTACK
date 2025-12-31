@@ -64,6 +64,12 @@ export default function TicketResult({ ticketData, onBack }) {
                                     <p className="text-[10px] uppercase font-black text-text-muted tracking-[0.4em] mb-3">Verification ID</p>
                                     <p className="text-2xl font-mono font-black text-primary-copper">{ticketData.ticketId}</p>
                                 </div>
+                                <div>
+                                    <p className="text-[10px] uppercase font-black text-text-muted tracking-[0.4em] mb-3">Pass Value</p>
+                                    <p className="text-xl font-black text-white italic tracking-tighter">
+                                        {ticketData.ticketPrice === "0" ? 'Complimentary' : `₦${Number(ticketData.ticketPrice).toLocaleString()}`}
+                                    </p>
+                                </div>
                             </div>
 
                             <div className="grid grid-cols-2 gap-10 mb-12 border-t border-white/5 pt-10">

@@ -25,7 +25,11 @@ async function main() {
 
     console.log('✅ Admin seeded:', admin.email);
 
-    // 2. Seed Ticket Categories
+    // 2. Clear old categories to ensure fresh start
+    await prisma.ticketCategory.deleteMany({});
+    console.log('🗑️ Old categories cleared');
+
+    // 3. Seed Ticket Categories
     const categories = [
         {
             id: 'cat_regular',
