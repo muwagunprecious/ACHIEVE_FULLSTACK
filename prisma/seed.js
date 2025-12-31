@@ -33,7 +33,7 @@ async function main() {
     const categories = [
         {
             id: 'cat_regular',
-            name: 'REGULAR PASS',
+            name: 'REGULAR',
             price: 0,
             description: 'Access to the Summit with overflow seating.',
             capacity: 2000,
@@ -47,7 +47,7 @@ async function main() {
         },
         {
             id: 'cat_economy',
-            name: 'ECONOMY PASS',
+            name: 'ECONOMY',
             price: 20000,
             description: 'Full access with main hall seating.',
             capacity: 1000,
@@ -64,7 +64,7 @@ async function main() {
         },
         {
             id: 'cat_business',
-            name: 'BUSINESS CLASS PASS',
+            name: 'BUSINESS CLASS',
             price: 250000,
             description: 'VIP access and networking opportunities.',
             capacity: 300,
@@ -86,7 +86,7 @@ async function main() {
         },
         {
             id: 'cat_firstclass',
-            name: 'FIRST CLASS PASS',
+            name: 'FIRST CLASS',
             price: 500000,
             description: 'Luxury experience with VVIP status.',
             capacity: 100,
@@ -110,7 +110,7 @@ async function main() {
         },
         {
             id: 'cat_bizjet',
-            name: 'EXCLUSIVE BIZJET PASS',
+            name: 'EXCLUSIVE BIZJET',
             price: 1500000,
             description: 'Ultimate elite privileges and investor visibility.',
             capacity: 5,

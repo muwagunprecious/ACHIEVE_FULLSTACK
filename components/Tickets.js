@@ -3,11 +3,11 @@ import React from 'react';
 import { Check, Sparkle, Zap, Crown, Rocket, Star } from 'lucide-react';
 
 const iconMap = {
-    'REGULAR PASS': <Sparkle size={20} />,
-    'ECONOMY PASS': <Rocket size={20} />,
-    'BUSINESS CLASS PASS': <Zap size={20} />,
-    'FIRST CLASS PASS': <Crown size={20} />,
-    'EXCLUSIVE BIZJET PASS': <Star size={20} />,
+    'REGULAR': <Sparkle size={20} />,
+    'ECONOMY': <Rocket size={20} />,
+    'BUSINESS CLASS': <Zap size={20} />,
+    'FIRST CLASS': <Crown size={20} />,
+    'EXCLUSIVE BIZJET': <Star size={20} />,
 };
 
 const defaultIcon = <Sparkle size={20} />;
