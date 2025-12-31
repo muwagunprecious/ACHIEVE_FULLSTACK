@@ -5,9 +5,9 @@ import { Check, Sparkle, Zap, Crown, Rocket, Star } from 'lucide-react';
 const iconMap = {
     'REGULAR PASS': <Sparkle size={20} />,
     'ECONOMY PASS': <Rocket size={20} />,
-    'BUSINESS PASS': <Zap size={20} />,
+    'BUSINESS CLASS PASS': <Zap size={20} />,
     'FIRST CLASS PASS': <Crown size={20} />,
-    'BIZJET PASS': <Star size={20} />,
+    'EXCLUSIVE BIZJET PASS': <Star size={20} />,
 };
 
 const defaultIcon = <Sparkle size={20} />;
@@ -91,7 +91,7 @@ export default function Tickets({ onBuy }) {
                                     </div>
                                     <h3 className="text-[10px] font-black text-text-muted tracking-[0.3em] uppercase mb-4">{ticket.name}</h3>
                                     <div className="text-2xl font-black text-primary-copper italic tracking-tighter">
-                                        Complimentary Access
+                                        {ticket.price === 0 ? 'Complimentary' : `₦${ticket.price.toLocaleString()}`}
                                     </div>
                                 </div>
 

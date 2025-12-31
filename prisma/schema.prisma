@@ -43,7 +43,7 @@ model Nomination {
   nominatorEmail String
   status         String   @default("PENDING")
   createdAt      DateTime @default(now())
-  updatedAt      DateTime
+  updatedAt      DateTime @updatedAt
 }
 
 model Nominee {
@@ -56,7 +56,7 @@ model Nominee {
   isVisible    Boolean  @default(false)
   votesCount   Int      @default(0)
   createdAt    DateTime @default(now())
-  updatedAt    DateTime
+  updatedAt    DateTime @updatedAt
   Vote         Vote[]
 }
 
@@ -70,11 +70,11 @@ model Popup {
   duration   Int      @default(5000)
   isEnabled  Boolean  @default(true)
   createdAt  DateTime @default(now())
-  updatedAt  DateTime
+  updatedAt  DateTime @updatedAt
 }
 
 model StandBooking {
-  id             String   @id
+  id             String   @id @default(cuid())
   bookingId      String   @unique
   orgName        String
   contactName    String
@@ -85,7 +85,7 @@ model StandBooking {
   status         String   @default("Pending")
   submissionDate DateTime @default(now())
   createdAt      DateTime @default(now())
-  updatedAt      DateTime
+  updatedAt      DateTime @updatedAt
 }
 
 model Partnership {
@@ -108,7 +108,7 @@ model Ticket {
   ticketCategoryId String
   status           String         @default("VALID")
   purchaseDate     DateTime       @default(now())
-  updatedAt        DateTime
+  updatedAt        DateTime       @updatedAt
   category         TicketCategory @relation(fields: [ticketCategoryId], references: [id])
   user             User           @relation(fields: [userId], references: [id])
 }
@@ -124,7 +124,7 @@ model TicketCategory {
   features    String[] @default([])
   status      String   @default("ACTIVE")
   createdAt   DateTime @default(now())
-  updatedAt   DateTime
+  updatedAt   DateTime @updatedAt
   tickets     Ticket[]
 }
 
@@ -134,7 +134,7 @@ model User {
   email     String   @unique
   phone     String?
   createdAt DateTime @default(now())
-  updatedAt DateTime
+  updatedAt DateTime @updatedAt
   tickets   Ticket[]
 }
 

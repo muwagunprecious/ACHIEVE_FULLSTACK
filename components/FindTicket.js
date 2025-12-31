@@ -9,23 +9,26 @@ export default function FindTicket() {
     const [error, setError] = useState('');
     const [isSearching, setIsSearching] = useState(false);
 
-    const handleSearch = (e) => {
+    const handleSearch = async (e) => {
         e.preventDefault();
         setError('');
         setIsSearching(true);
 
-        // Simulate lookup delay
-        setTimeout(() => {
-            const existingTickets = JSON.parse(localStorage.getItem('achievers_tickets') || '[]');
-            const ticket = existingTickets.find(t => t.fullName.toLowerCase().trim() === searchName.toLowerCase().trim());
+        try {
+            const response = await fetch(`/api/tickets/search?name=${encodeURIComponent(searchName)}`);
+            const data = await response.json();
 
-            if (ticket) {
-                setFoundTicket(ticket);
+            if (response.ok) {
+                setFoundTicket(data);
             } else {
-                setError("No registration record matches this name. Please verify the credentials.");
+                setError(data.error || "No registration record matches this name.");
             }
+        } catch (err) {
+            console.error("Search Error:", err);
+            setError("Authentication protocol failure. Please try again.");
+        } finally {
             setIsSearching(false);
-        }, 1500);
+        }
     };
 
     if (foundTicket) {

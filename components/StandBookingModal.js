@@ -22,40 +22,35 @@ export default function StandBookingModal({ onClose }) {
         };
     }, []);
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
         setIsSubmitting(true);
 
-        setTimeout(async () => {
-            const bookingId = 'BK-' + Math.random().toString(36).substr(2, 6).toUpperCase();
-            const bookingData = {
-                ...formData,
-                bookingId,
-                status: 'Pending',
-                submissionDate: new Date().toLocaleDateString()
-            };
+        const bookingId = 'BK-' + Math.random().toString(36).substr(2, 6).toUpperCase();
+        const bookingData = {
+            ...formData,
+            bookingId
+        };
 
-            try {
-                // Import api client at component level if needed
-                const { default: api } = await import('@/lib/api');
-                await api.createBooking(bookingData);
+        try {
+            const { default: api } = await import('@/lib/api');
+            await api.createBooking(bookingData);
 
-                setIsSubmitting(false);
+            setIsSubmitting(false);
 
-                // Redirect to confirmation page
-                const params = new URLSearchParams({
-                    id: bookingId,
-                    org: formData.orgName,
-                    type: formData.standType,
-                    contact: formData.contactName
-                });
-                window.location.href = `/booking-confirmation?${params.toString()}`;
-            } catch (error) {
-                console.error("Booking Error:", error);
-                alert("Failed to submit booking request. Please try again.");
-                setIsSubmitting(false);
-            }
-        }, 2000);
+            // Redirect to confirmation page
+            const params = new URLSearchParams({
+                id: bookingId,
+                org: formData.orgName,
+                type: formData.standType,
+                contact: formData.contactName
+            });
+            window.location.href = `/booking-confirmation?${params.toString()}`;
+        } catch (error) {
+            console.error("Booking Error:", error);
+            alert("Failed to submit booking request. Please try again.");
+            setIsSubmitting(false);
+        }
     };
 
 
