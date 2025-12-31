@@ -1,55 +1,20 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { generateTicketPDF } from '@/lib/pdf-service';
+import { sendTicketEmail } from '@/lib/email-service';
 
 export async function POST(req) {
     try {
-        const { fullName, email, phone, ticketType, reference } = await req.json();
+        const { fullName, email, phone, ticketType } = await req.json();
 
-        if (!reference || !email || !ticketType) {
+        if (!fullName || !email || !ticketType) {
             return NextResponse.json(
                 { error: 'Missing required fields' },
                 { status: 400 }
             );
         }
 
-        // 1. Idempotency Check: Check if ticket with this reference already exists
-        const existingTicket = await prisma.eventTicket.findFirst({
-            where: { reference }
-        });
-
-        if (existingTicket) {
-            console.log(`Return existing ticket for reference: ${reference}`);
-            return NextResponse.json(existingTicket);
-        }
-
-        // 2. Verify Payment with Paystack
-        const verifyUrl = `https://api.paystack.co/transaction/verify/${reference}`;
-        const paystackResponse = await fetch(verifyUrl, {
-            method: 'GET',
-            headers: {
-                Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
-                'Content-Type': 'application/json',
-            },
-        });
-
-        if (!paystackResponse.ok) {
-            console.error('Paystack verification failed:', await paystackResponse.text());
-            return NextResponse.json(
-                { error: 'Payment verification failed' },
-                { status: 400 }
-            );
-        }
-
-        const paystackData = await paystackResponse.json();
-
-        if (paystackData.data.status !== 'success') {
-            return NextResponse.json(
-                { error: `Payment status is ${paystackData.data.status}` },
-                { status: 400 }
-            );
-        }
-
-        // 3. Get Ticket Category to confirm price/validity
+        // 1. Get Ticket Category to confirm price/validity
         const category = await prisma.ticketCategory.findFirst({
             where: { name: ticketType }
         });
@@ -61,7 +26,7 @@ export async function POST(req) {
             );
         }
 
-        // 4. Generate Ticket ID
+        // 2. Generate Unique Ticket ID
         const generateTicketId = () => {
             const randomPart = Math.random().toString(36).substring(2, 8).toUpperCase();
             return `AS2026-${randomPart}`;
@@ -71,7 +36,6 @@ export async function POST(req) {
         let isUnique = false;
         let retries = 0;
 
-        // Simple uniqueness check retry loop
         while (!isUnique && retries < 5) {
             const check = await prisma.eventTicket.findUnique({ where: { ticketId } });
             if (!check) isUnique = true;
@@ -88,7 +52,7 @@ export async function POST(req) {
             );
         }
 
-        // 5. Create Ticket
+        // 3. Create Ticket Record in DB
         const newTicket = await prisma.eventTicket.create({
             data: {
                 fullName,
@@ -97,18 +61,53 @@ export async function POST(req) {
                 ticketType: category.name,
                 ticketPrice: String(category.price),
                 ticketId,
-                reference,
+                reference: `INSTANT-${ticketId}`, // Marking as instant for clarity
                 status: 'VALID',
-                purchaseDate: new Date(paystackData.data.paid_at || new Date()),
+                purchaseDate: new Date(),
             },
         });
 
-        return NextResponse.json(newTicket, { status: 201 });
+        // 4. Generate PDF
+        console.log('Generating PDF for:', ticketId);
+        const pdfBuffer = await generateTicketPDF({
+            fullName,
+            ticketType: category.name,
+            ticketId
+        });
+
+        // 5. Send Email
+        console.log('Sending email to:', email);
+        try {
+            await sendTicketEmail({
+                email,
+                fullName,
+                ticketType: category.name,
+                ticketId,
+                pdfBuffer
+            });
+            console.log('Email sent successfully');
+        } catch (emailError) {
+            console.error('Email delivery failed:', emailError);
+            // We return success for ticket generation but mention email failure if needed, 
+            // or just follow user instruction for "Email Delivery Failure" popup handling.
+            // For the API, we'll return a specific flag if email failed.
+            return NextResponse.json({
+                ...newTicket,
+                emailSent: false,
+                error: 'Email delivery failed'
+            }, { status: 201 });
+        }
+
+        return NextResponse.json({
+            ...newTicket,
+            emailSent: true,
+            pdfBase64: pdfBuffer.toString('base64')
+        }, { status: 201 });
 
     } catch (error) {
-        console.error('Error creating ticket:', error);
+        console.error('Error in instant ticket issuance:', error);
         return NextResponse.json(
-            { error: 'Internal server error' },
+            { error: error.message || 'Internal server error' },
             { status: 500 }
         );
     }

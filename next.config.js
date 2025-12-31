@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+    serverExternalPackages: ['pdf-lib'], // Just in case, though pdf-lib is usually fine
     experimental: {
         serverActions: {
             bodySizeLimit: '10mb',
@@ -7,14 +8,6 @@ const nextConfig = {
     },
     async rewrites() {
         return [
-            {
-                source: '/api/tickets/:path*',
-                destination: 'http://localhost:4000/api/tickets/:path*',
-            },
-            {
-                source: '/api/payments/:path*',
-                destination: 'http://localhost:4000/api/payments/:path*',
-            },
             {
                 source: '/api/bookings/:path*',
                 destination: 'http://localhost:4000/api/bookings/:path*',
@@ -28,9 +21,6 @@ const nextConfig = {
                 destination: 'http://localhost:4000/api/speakers/:path*',
             },
         ];
-    },
-    env: {
-        NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY: 'pk_test_d96e04b83fe2aa7577fe6faa723ea76a320eb10b',
     },
 }
 

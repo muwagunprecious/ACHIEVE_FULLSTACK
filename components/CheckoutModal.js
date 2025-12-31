@@ -1,316 +1,272 @@
 "use client";
-import { useState, useEffect, useMemo, useRef } from 'react';
-import { X, CheckCircle, AlertCircle, Loader2, CreditCard } from 'lucide-react';
-import api, { ApiError } from '@/lib/api';
-import { usePaystackPayment } from 'react-paystack';
+import { useState, useEffect } from 'react';
+import { X, CheckCircle, AlertCircle, Loader2, Send, Download } from 'lucide-react';
+import api from '@/lib/api';
 
-// Ticket creation state constants
-const TicketStatus = {
-    IDLE: 'idle',
-    PAYING: 'paying',
-    GENERATING: 'generating',
+const ModalState = {
+    FORM: 'form',
+    PROCESSING: 'processing',
     SUCCESS: 'success',
-    FAILED: 'failed'
+    ERROR: 'error'
 };
 
-const ErrorMessages = {
-    TICKET_CREATION_FAILED: "Failed to generate ticket. Please try again.",
-    PAYMENT_FAILED: "Payment was not successful. Please try again.",
-    NETWORK_ERROR: "Network error. Please check your connection and try again."
-};
-
-export default function CheckoutModal({ isOpen, onClose, ticket, onComplete }) {
+export default function RegistrationModal({ isOpen, onClose, ticket, onComplete }) {
     const [formData, setFormData] = useState({
         fullName: '',
         email: '',
         phone: ''
     });
 
-    const [status, setStatus] = useState(TicketStatus.IDLE);
+    const [state, setState] = useState(ModalState.FORM);
     const [errorMessage, setErrorMessage] = useState('');
-
-    // Paystack Configuration
-    const [reference, setReference] = useState('');
-    const [isConfigReady, setIsConfigReady] = useState(false);
-
-    // Safety Refs to handle callback closures and race conditions
-    const isSuccessRef = useRef(false);
+    const [createdTicket, setCreatedTicket] = useState(null);
 
     useEffect(() => {
         if (isOpen) {
-            // Reset state on open
-            setReference('');
-            setIsConfigReady(false);
-            setStatus(TicketStatus.IDLE);
+            setState(ModalState.FORM);
             setErrorMessage('');
-            isSuccessRef.current = false;
-
-            // Fetch strict server-side reference immediately when modal opens
-            api.request('/api/payments/reference')
-                .then(data => {
-                    console.log("Got reference:", data.reference);
-                    setReference(data.reference);
-                })
-                .catch(err => {
-                    console.error("Failed to get reference", err);
-                    setErrorMessage("Connection failed. Please reopen.");
-                });
-        }
-    }, [isOpen]);
-
-    // Paystack Configuration - Memoized
-    const config = useMemo(() => {
-        return {
-            reference: reference || 'pending_ref',
-            email: formData.email,
-            amount: (ticket.price || 0) * 100, // Amount in kobo
-            publicKey: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || '',
-            metadata: {
-                fullName: formData.fullName,
-                phone: formData.phone,
-                ticketType: ticket.name
-            }
-        };
-    }, [reference, formData.email, formData.fullName, formData.phone, ticket.price, ticket.name]);
-
-    // Initialize hook. It updates when config updates.
-    const initializePayment = usePaystackPayment(config);
-
-    // Update ready state
-    useEffect(() => {
-        if (reference && process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY && config.publicKey) {
-            setIsConfigReady(true);
-        } else {
-            setIsConfigReady(false);
-        }
-    }, [reference, config]);
-
-    // Lock body scroll when modal is open
-    useEffect(() => {
-        if (isOpen) {
+            setCreatedTicket(null);
             document.body.style.overflow = 'hidden';
         } else {
             document.body.style.overflow = 'unset';
-            setStatus(TicketStatus.IDLE);
         }
         return () => {
             document.body.style.overflow = 'unset';
         };
     }, [isOpen]);
 
-    const handleCreateTicket = async (ref) => {
-        setStatus(TicketStatus.GENERATING);
-        try {
-            const ticketId = 'AS2026-' + Date.now().toString(36).toUpperCase();
-            const ticketData = {
-                ...formData,
-                ticketType: ticket.name,
-                ticketPrice: ticket.price || 0,
-                ticketId,
-                reference: ref || 'DIRECT-' + ticketId,
-                paymentVerified: true,
-                purchaseDate: new Date().toLocaleDateString()
-            };
-            await api.createTicket(ticketData);
-            setStatus(TicketStatus.SUCCESS);
-            setTimeout(() => onComplete(ticketData), 1000);
-        } catch (error) {
-            console.error("❌ Ticket Creation Error:", error);
-            setErrorMessage(error instanceof ApiError && error.code === 'NETWORK_ERROR'
-                ? ErrorMessages.NETWORK_ERROR
-                : ErrorMessages.TICKET_CREATION_FAILED);
-            setStatus(TicketStatus.FAILED);
-        }
-    };
-
-    // Callbacks must be stable or handle refs to avoid stale closures
-    const onSuccess = (reference) => {
-        console.log("✅ Paystack onSuccess triggered!", reference);
-        isSuccessRef.current = true;
-
-        // Show success state briefly before redirect
-        setStatus(TicketStatus.SUCCESS);
-
-        // Redirect to verification page
-        const params = new URLSearchParams({
-            reference: reference.reference,
-            email: formData.email,
-            ticketType: ticket.name,
-            fullName: formData.fullName,
-            phone: formData.phone || ''
-        });
-
-        // Forced Redirect after short delay
-        setTimeout(() => {
-            window.location.href = `/payment-verification?${params.toString()}`;
-        }, 300);
-    };
-
-    const onClosePayment = () => {
-
-        // Check ref to see if we already succeeded
-        if (isSuccessRef.current) {
-            console.log("❌ Paystack onClose triggered BUT ignored success");
-            return;
-        }
-
-        console.log("❌ Paystack onClose triggered - User cancelled");
-        setStatus(TicketStatus.IDLE);
-        setErrorMessage("Payment cancelled.");
+    const handleChange = (e) => {
+        setFormData({ ...formData, [e.target.name]: e.target.value });
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        isSuccessRef.current = false; // Reset
 
-        if (!formData.fullName || !formData.email) {
-            alert('Please fill in all required fields');
+        if (!formData.fullName || !formData.email || !formData.phone) {
             return;
         }
 
-        // Free Ticket
-        if (ticket.price === 0) {
-            await handleCreateTicket('FREE-' + Date.now());
-            return;
+        setState(ModalState.PROCESSING);
+
+        try {
+            // Updated API call to the instant issuance endpoint
+            const response = await fetch('/api/tickets/create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    ...formData,
+                    ticketType: ticket.name
+                })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to generate ticket');
+            }
+
+            setCreatedTicket(data);
+
+            if (data.emailSent === false) {
+                setState(ModalState.ERROR);
+                setErrorMessage('Your ticket was generated successfully, but we were unable to send it to your email.');
+            } else {
+                setState(ModalState.SUCCESS);
+            }
+        } catch (error) {
+            console.error('Registration error:', error);
+            setState(ModalState.ERROR);
+            if (error.message.includes('network')) {
+                setErrorMessage('We couldn’t complete your request due to a network issue. Please check your internet connection and try again.');
+            } else {
+                setErrorMessage(error.message || 'Something went wrong while processing your request.');
+            }
         }
-
-        if (!isConfigReady) {
-            alert("Payment system initializing... please wait a moment.");
-            return;
-        }
-
-        // We set status to PAYING to show the "Redirecting..." UI
-        setStatus(TicketStatus.PAYING);
-
-        // Call Paystack
-        initializePayment(onSuccess, onClosePayment);
     };
 
-    const handleRetry = () => {
-        setStatus(TicketStatus.IDLE);
-        setErrorMessage('');
-    };
+    const handleDownload = () => {
+        if (!createdTicket?.pdfBase64) return;
 
-    if (!isOpen) return null;
+        const link = document.createElement('a');
+        link.href = `data:application/pdf;base64,${createdTicket.pdfBase64}`;
+        link.download = `Achievers_Summit_2026_Ticket_${createdTicket.ticketId}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
 
     return (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-            <div className="bg-midnight-black border border-white/10 rounded-[40px] max-w-md w-full relative shadow-[0_0_100px_rgba(210,164,120,0.2)] animate-fade-in-up max-h-[85vh] flex flex-col overflow-hidden">
-                <div className="flex-grow overflow-y-auto p-8 md:p-10 custom-scrollbar">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/90 backdrop-blur-xl animate-fade-in">
+            <div className="relative w-full max-w-lg bg-midnight-black border border-white/10 rounded-[40px] shadow-[0_0_100px_rgba(210,164,120,0.15)] overflow-hidden">
 
-                    {status === TicketStatus.PAYING && (
-                        <div className="text-center py-20 relative z-10 animate-fade-in">
-                            <Loader2 className="w-24 h-24 mx-auto mb-8 text-primary-copper animate-spin" />
-                            <h3 className="text-3xl font-black italic mb-4">Complete Payment</h3>
-                            <p className="text-text-muted mb-6">Processing your payment in the popup...</p>
+                {/* Close Button (Only visible in FORM and SUCCESS/ERROR states) */}
+                {(state === ModalState.FORM || state === ModalState.SUCCESS || state === ModalState.ERROR) && (
+                    <button
+                        onClick={onClose}
+                        className="absolute top-8 right-8 w-10 h-10 flex items-center justify-center rounded-full bg-white/5 border border-white/10 text-white/40 hover:text-white transition-all z-20"
+                    >
+                        <X size={20} />
+                    </button>
+                )}
 
-                            <div className="flex flex-col gap-3 items-center">
-                                <button
-                                    onClick={() => onSuccess({ reference })}
-                                    className="btn btn-primary px-8 py-3 font-bold text-sm tracking-wider animate-pulse"
-                                >
-                                    I HAVE COMPLETED PAYMENT
-                                </button>
-
-                                <button onClick={onClosePayment} className="text-xs text-white/40 hover:text-white underline mt-2">
-                                    Cancel Transaction
-                                </button>
-                            </div>
-                        </div>
-                    )}
-
-                    {status === TicketStatus.GENERATING && (
-                        <div className="text-center py-20">
-                            <Loader2 className="w-24 h-24 mx-auto mb-8 text-primary-copper animate-spin" />
-                            <h3 className="text-3xl font-black italic mb-4">Generating Ticket...</h3>
-                            <p className="text-text-muted">Creating your unique ticket credentials</p>
-                        </div>
-                    )}
-
-                    {status === TicketStatus.SUCCESS && (
-                        <div className="text-center py-20">
-                            <CheckCircle className="w-24 h-24 mx-auto mb-8 text-green-500" />
-                            <h3 className="text-3xl font-black italic mb-4 text-green-500">Success!</h3>
-                            <p className="text-text-muted">Redirecting to your ticket...</p>
-                        </div>
-                    )}
-
-                    {status === TicketStatus.FAILED && (
-                        <div className="text-center py-12">
-                            <AlertCircle className="w-24 h-24 mx-auto mb-8 text-red-500" />
-                            <h3 className="text-3xl font-black italic mb-4 text-red-500">Processing Failed</h3>
-                            <p className="text-text-muted mb-8 whitespace-pre-line">{errorMessage}</p>
-                            <div className="flex gap-4 justify-center">
-                                <button onClick={handleRetry} className="btn btn-primary px-8 font-black italic">Try Again</button>
-                                <button onClick={onClose} className="btn bg-white/5 px-8 font-black italic">Close</button>
-                            </div>
-                        </div>
-                    )}
-
-                    {status === TicketStatus.IDLE && (
-                        <>
-                            <button
-                                onClick={onClose}
-                                className="absolute top-8 right-8 w-10 h-10 flex items-center justify-center bg-white/5 hover:bg-white/20 rounded-full transition-all text-white border border-white/10 shadow-lg z-10"
-                                title="Close"
-                            >
-                                <X size={20} />
-                            </button>
-
+                <div className="p-10">
+                    {state === ModalState.FORM && (
+                        <div className="animate-fade-in-up">
                             <div className="text-center mb-10">
-                                <div className="inline-block px-6 py-2 rounded-full bg-primary-copper/10 border border-primary-copper/20 mb-6">
-                                    <span className="text-primary-copper font-black text-sm tracking-widest uppercase">{ticket.name}</span>
+                                <div className="inline-block px-4 py-1.5 rounded-full bg-primary-copper/10 border border-primary-copper/20 text-primary-copper font-black text-[10px] tracking-[0.3em] uppercase mb-4">
+                                    {ticket.name} Registration
                                 </div>
-                                <h2 className="text-4xl font-black italic tracking-tighter mb-4">Ticket Registration</h2>
-                                <div className="text-5xl font-black text-primary-copper italic">₦{ticket.price.toLocaleString()}</div>
+                                <h2 className="text-3xl font-black italic text-white mb-2">Get Your <span className="text-gradient">Ticket.</span></h2>
+                                <p className="text-text-muted text-sm font-light italic">No payment required. Ticket issued instantly.</p>
                             </div>
 
                             <form onSubmit={handleSubmit} className="space-y-6">
                                 <div>
-                                    <label className="block text-[10px] font-black uppercase tracking-widest text-text-muted mb-3">Full Name *</label>
-                                    <input type="text" required
-                                        className="w-full h-14 bg-white/5 border border-white/10 rounded-xl px-6 outline-none text-white focus:border-primary-copper/50 transition-all font-medium"
-                                        value={formData.fullName} onChange={(e) => setFormData({ ...formData, fullName: e.target.value })} placeholder="John Doe" />
+                                    <label className="block text-[10px] font-black uppercase tracking-widest text-white/40 mb-2">Full Name *</label>
+                                    <input
+                                        type="text"
+                                        name="fullName"
+                                        required
+                                        value={formData.fullName}
+                                        onChange={handleChange}
+                                        className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-6 text-white focus:border-primary-copper/50 outline-none transition-all placeholder:text-white/10"
+                                        placeholder="Enter your full name"
+                                    />
                                 </div>
-
                                 <div>
-                                    <label className="block text-[10px] font-black uppercase tracking-widest text-text-muted mb-3">Email Address *</label>
-                                    <input type="email" required
-                                        className="w-full h-14 bg-white/5 border border-white/10 rounded-xl px-6 outline-none text-white focus:border-primary-copper/50 transition-all font-medium"
-                                        value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} placeholder="john@example.com" />
+                                    <label className="block text-[10px] font-black uppercase tracking-widest text-white/40 mb-2">Email Address *</label>
+                                    <input
+                                        type="email"
+                                        required
+                                        name="email"
+                                        value={formData.email}
+                                        onChange={handleChange}
+                                        className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-6 text-white focus:border-primary-copper/50 outline-none transition-all placeholder:text-white/10"
+                                        placeholder="example@email.com"
+                                    />
                                 </div>
-
                                 <div>
-                                    <label className="block text-[10px] font-black uppercase tracking-widest text-text-muted mb-3">Phone Number</label>
-                                    <input type="tel"
-                                        className="w-full h-14 bg-white/5 border border-white/10 rounded-xl px-6 outline-none text-white focus:border-primary-copper/50 transition-all font-medium"
-                                        value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} placeholder="+234 XXX XXX XXXX" />
+                                    <label className="block text-[10px] font-black uppercase tracking-widest text-white/40 mb-2">Phone Number *</label>
+                                    <input
+                                        type="tel"
+                                        required
+                                        name="phone"
+                                        value={formData.phone}
+                                        onChange={handleChange}
+                                        className="w-full h-14 bg-white/5 border border-white/10 rounded-2xl px-6 text-white focus:border-primary-copper/50 outline-none transition-all placeholder:text-white/10"
+                                        placeholder="+234 ..."
+                                    />
                                 </div>
 
-                                <button type="submit"
-                                    disabled={!isConfigReady}
-                                    className="btn btn-primary w-full h-16 text-lg font-black uppercase tracking-widest flex items-center justify-center gap-3 disabled:opacity-50 italic">
-                                    {isConfigReady ? (
-                                        <>
-                                            <CreditCard size={24} />
-                                            PAY & GET TICKET
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Loader2 className="animate-spin" size={24} />
-                                            INITIALIZING...
-                                        </>
-                                    )}
+                                <button
+                                    type="submit"
+                                    className="btn btn-primary w-full h-16 text-xs font-black tracking-[0.4em] uppercase shadow-2xl shadow-primary-copper/20 flex items-center justify-center gap-3 italic"
+                                >
+                                    GET MY TICKET
                                 </button>
-
-                                <p className="text-[10px] text-center text-text-muted font-medium uppercase tracking-widest opacity-50">
-                                    Secured by Paystack
-                                </p>
                             </form>
-                        </>
+                        </div>
+                    )}
+
+                    {state === ModalState.PROCESSING && (
+                        <div className="text-center py-20 animate-fade-in">
+                            <div className="relative w-32 h-32 mx-auto mb-10">
+                                <div className="absolute inset-0 rounded-full border-2 border-primary-copper/10 animate-ping"></div>
+                                <div className="absolute inset-2 rounded-full border-4 border-t-primary-copper border-r-transparent border-b-transparent border-l-transparent animate-spin"></div>
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                    <Loader2 className="w-12 h-12 text-primary-copper" />
+                                </div>
+                            </div>
+                            <h3 className="text-3xl font-black italic text-white mb-4 uppercase tracking-tighter">Generating Your Ticket</h3>
+                            <p className="text-text-muted text-sm font-light leading-relaxed max-w-[280px] mx-auto italic">
+                                Please wait while we generate your personalized ticket and send it to your email.
+                            </p>
+                        </div>
+                    )}
+
+                    {state === ModalState.SUCCESS && (
+                        <div className="text-center py-10 animate-fade-in">
+                            <div className="w-24 h-24 bg-green-500/10 border border-green-500/20 rounded-full flex items-center justify-center mx-auto mb-10">
+                                <CheckCircle className="w-12 h-12 text-green-500" />
+                            </div>
+                            <h3 className="text-3xl font-black italic text-white mb-4 uppercase tracking-tighter">Ticket Sent Successfully 🎉</h3>
+                            <p className="text-text-muted text-sm font-light leading-relaxed mb-10 italic">
+                                Your ticket has been successfully sent to <span className="text-white font-bold">{formData.email}</span>. Please check your inbox (and spam folder if necessary).
+                            </p>
+                            <div className="flex flex-col gap-4">
+                                <button
+                                    onClick={handleDownload}
+                                    className="btn btn-primary w-full h-14 text-[10px] font-black tracking-[0.4em] uppercase shadow-2xl shadow-primary-copper/30 flex items-center justify-center gap-3 italic"
+                                >
+                                    <Download size={14} /> DOWNLOAD TICKET
+                                </button>
+                                <button
+                                    onClick={onClose}
+                                    className="text-white/40 text-[10px] font-black tracking-[0.3em] uppercase hover:text-white transition-colors"
+                                >
+                                    BACK TO HOMEPAGE
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {state === ModalState.ERROR && (
+                        <div className="text-center py-10 animate-fade-in">
+                            <div className="w-24 h-24 bg-red-500/10 border border-red-500/20 rounded-full flex items-center justify-center mx-auto mb-10">
+                                <AlertCircle className="w-12 h-12 text-red-500" />
+                            </div>
+                            <h3 className="text-3xl font-black italic text-white mb-4 uppercase tracking-tighter">
+                                {errorMessage.includes('unable to send') ? 'Email Delivery Failed' : 'Action Failed'}
+                            </h3>
+                            <p className="text-text-muted text-sm font-light leading-relaxed mb-10 italic">
+                                {errorMessage}
+                            </p>
+
+                            <div className="flex flex-col gap-4">
+                                {errorMessage.includes('unable to send') ? (
+                                    <>
+                                        <button onClick={handleDownload} className="btn btn-primary w-full h-14 text-[10px] font-black tracking-[0.4em] uppercase shadow-2xl shadow-primary-copper/30 flex items-center justify-center gap-3 italic">
+                                            <Download size={14} /> DOWNLOAD TICKET
+                                        </button>
+                                        <button onClick={handleSubmit} className="text-primary-copper text-[10px] font-black tracking-[0.3em] uppercase hover:underline transition-colors flex items-center justify-center gap-2">
+                                            <Send size={14} /> RETRY EMAIL
+                                        </button>
+                                        <button onClick={onClose} className="text-white/40 text-[10px] font-black tracking-[0.3em] uppercase hover:text-white transition-colors">CLOSE</button>
+                                    </>
+                                ) : (
+                                    <>
+                                        <button onClick={() => setState(ModalState.FORM)} className="btn btn-primary w-full h-14 text-[10px] font-black tracking-[0.4em] uppercase italic">TRY AGAIN</button>
+                                        <button onClick={onClose} className="text-white/40 text-[10px] font-black tracking-[0.3em] uppercase hover:text-white transition-colors">CLOSE</button>
+                                    </>
+                                )}
+                            </div>
+                        </div>
                     )}
                 </div>
             </div>
+
+            <style jsx>{`
+                .text-gradient {
+                    background: linear-gradient(135deg, var(--primary-copper) 0%, var(--primary-gold) 100%);
+                    -webkit-background-clip: text;
+                    -webkit-text-fill-color: transparent;
+                    background-clip: text;
+                }
+                .animate-fade-in {
+                    animation: fadeIn 0.5s ease-out forwards;
+                }
+                .animate-fade-in-up {
+                    animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+                }
+                @keyframes fadeIn {
+                    from { opacity: 0; }
+                    to { opacity: 1; }
+                }
+                @keyframes fadeInUp {
+                    from { opacity: 0; transform: translateY(20px); }
+                    to { opacity: 1; transform: translateY(0); }
+                }
+            `}</style>
         </div>
     );
 }

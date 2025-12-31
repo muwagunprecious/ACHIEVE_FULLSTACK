@@ -11,13 +11,13 @@ import TicketResult from '../components/TicketResult';
 import FindTicket from '../components/FindTicket';
 import Footer from '../components/Footer';
 
-const StandBookingModal = dynamic(() => import('../components/StandBookingModal'), { ssr: false });
+const PartnershipModal = dynamic(() => import('../components/PartnershipModal'), { ssr: false });
 const CheckoutModal = dynamic(() => import('../components/CheckoutModal'), { ssr: false });
 
 export default function Home() {
   const router = useRouter();
   const [selectedTicket, setSelectedTicket] = useState(null);
-  const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
+  const [isPartnerModalOpen, setIsPartnerModalOpen] = useState(false);
 
   const handleBuy = (ticket) => {
     setSelectedTicket(ticket);
@@ -30,7 +30,7 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-bg-deep">
-      <Navbar isHidden={!!selectedTicket || isBookingModalOpen} />
+      <Navbar isHidden={!!selectedTicket || isPartnerModalOpen} />
 
       <section id="home">
         <Hero />
@@ -63,7 +63,7 @@ export default function Home() {
         </div>
       </section>
 
-      <ExhibitionStand onBook={() => setIsBookingModalOpen(true)} />
+      <ExhibitionStand onBook={() => setIsPartnerModalOpen(true)} />
 
       <section id="schedule" className="py-40 bg-bg-deep relative">
         <div className="container">
@@ -126,9 +126,9 @@ export default function Home() {
         />
       )}
 
-      {isBookingModalOpen && (
-        <StandBookingModal
-          onClose={() => setIsBookingModalOpen(false)}
+      {isPartnerModalOpen && (
+        <PartnershipModal
+          onClose={() => setIsPartnerModalOpen(false)}
         />
       )}
 

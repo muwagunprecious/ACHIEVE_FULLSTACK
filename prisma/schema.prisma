@@ -18,7 +18,7 @@ model Admin {
 }
 
 model EventTicket {
-  id           String   @id
+  id           String   @id @default(cuid())
   ticketId     String   @unique
   fullName     String
   email        String
@@ -29,7 +29,7 @@ model EventTicket {
   status       String   @default("VALID")
   purchaseDate DateTime @default(now())
   createdAt    DateTime @default(now())
-  updatedAt    DateTime
+  updatedAt    DateTime @updatedAt
 }
 
 model Nomination {
@@ -86,6 +86,19 @@ model StandBooking {
   submissionDate DateTime @default(now())
   createdAt      DateTime @default(now())
   updatedAt      DateTime
+}
+
+model Partnership {
+  id              String   @id @default(cuid())
+  companyName     String
+  contactPerson   String
+  email           String
+  phone           String
+  partnershipType String
+  message         String
+  status          String   @default("Pending")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
 
 model Ticket {

@@ -45,10 +45,10 @@ export default function Tickets({ onBuy }) {
         <section id="tickets" className="section bg-bg-deep relative overflow-hidden">
             <div className="container">
                 <div className="text-center mb-24 max-w-4xl mx-auto">
-                    <div className="text-primary-copper font-black text-[10px] tracking-[0.4em] uppercase mb-4">Investment Levels</div>
-                    <h2 className="text-5xl md:text-8xl text-white mb-8 italic">Choose Your <span className="text-gradient font-black NOT-italic">Experience.</span></h2>
+                    <div className="text-primary-copper font-black text-[10px] tracking-[0.4em] uppercase mb-4">Registration Open</div>
+                    <h2 className="text-5xl md:text-8xl text-white mb-8 italic">Get Your <span className="text-gradient font-black NOT-italic">Official Pass.</span></h2>
                     <p className="text-xl text-text-secondary font-light">
-                        Select the tier that resonates with your vision. Each pass offers a distinct pathway to excellence and institutional connection.
+                        Select your preferred experience level and secure your seat instantly. Each pass is issued as a digital PDF delivered to your email.
                     </p>
                 </div>
 
@@ -90,8 +90,8 @@ export default function Tickets({ onBuy }) {
                                         {iconMap[ticket.name] || defaultIcon}
                                     </div>
                                     <h3 className="text-[10px] font-black text-text-muted tracking-[0.3em] uppercase mb-4">{ticket.name}</h3>
-                                    <div className="text-5xl font-black text-white italic tracking-tighter">
-                                        {ticket.price === 0 ? 'Free' : `₦${ticket.price.toLocaleString()}`}
+                                    <div className="text-2xl font-black text-primary-copper italic tracking-tighter">
+                                        Complimentary Access
                                     </div>
                                 </div>
 
@@ -111,7 +111,7 @@ export default function Tickets({ onBuy }) {
                                     disabled={!active}
                                     className={`btn w-full !py-4 transition-all duration-500 ${ticket.popular && active ? 'btn-primary shadow-lg shadow-primary-copper/20' : 'btn-outline border-white/10 hover:border-white disabled:opacity-50 disabled:cursor-not-allowed'}`}
                                 >
-                                    <span className="tracking-[0.2em]">{active ? 'Secure Passage' : 'Locked'}</span>
+                                    <span className="tracking-[0.2em]">{active ? 'GET MY TICKET' : 'Locked'}</span>
                                 </button>
 
                                 {/* Decorative Background Accent */}
