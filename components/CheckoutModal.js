@@ -114,10 +114,12 @@ export default function RegistrationModal({ isOpen, onClose, ticket, onComplete 
                         <div className="animate-fade-in-up">
                             <div className="text-center mb-10">
                                 <div className="inline-block px-4 py-1.5 rounded-full bg-primary-copper/10 border border-primary-copper/20 text-primary-copper font-black text-[10px] tracking-[0.3em] uppercase mb-4">
-                                    {ticket.name} Registration
+                                    {ticket.name} • {ticket.price === 0 ? 'Free' : `₦${ticket.price.toLocaleString()}`}
                                 </div>
                                 <h2 className="text-3xl font-black italic text-white mb-2">Get Your <span className="text-gradient">Ticket.</span></h2>
-                                <p className="text-text-muted text-sm font-light italic">No payment required. Ticket issued instantly.</p>
+                                <p className="text-text-muted text-sm font-light italic">
+                                    {ticket.price === 0 ? 'No payment required. Ticket issued instantly.' : 'Complete registration to secure your seat.'}
+                                </p>
                             </div>
 
                             <form onSubmit={handleSubmit} className="space-y-6">

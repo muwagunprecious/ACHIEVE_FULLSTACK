@@ -72,6 +72,7 @@ export async function POST(req) {
         const pdfBuffer = await generateTicketPDF({
             fullName,
             ticketType: category.name,
+            ticketPrice: category.price === 0 ? 'Complimentary' : `NGN ${category.price.toLocaleString()}`,
             ticketId
         });
 
