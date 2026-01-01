@@ -1,6 +1,6 @@
 "use client";
 import React, { useState } from 'react';
-import { X, Building2, User, Mail, Phone, BookOpen, MessageSquare, CheckCircle2 } from 'lucide-react';
+import { X, Building2, User, Mail, Phone, BookOpen, MessageSquare, CheckCircle2, Loader2 } from 'lucide-react';
 
 export default function StandBookingModal({ onClose }) {
     const [formData, setFormData] = useState({
@@ -145,9 +145,16 @@ export default function StandBookingModal({ onClose }) {
                         <button
                             type="submit"
                             disabled={isSubmitting}
-                            className="btn btn-primary w-full h-14 text-[11px] uppercase tracking-[0.6em] disabled:opacity-50 !p-0 shadow-lg shadow-primary-copper/20 hover:scale-[1.02] active:scale-[0.98] transition-all mt-4"
+                            className="btn btn-primary w-full h-14 text-[11px] uppercase tracking-[0.6em] disabled:opacity-50 !p-0 shadow-lg shadow-primary-copper/20 hover:scale-[1.02] active:scale-[0.98] transition-all mt-4 flex items-center justify-center gap-3"
                         >
-                            {isSubmitting ? 'LOGGING REQUEST...' : 'CONFIRM PROTOCOL'}
+                            {isSubmitting ? (
+                                <>
+                                    <Loader2 size={16} className="animate-spin" />
+                                    <span>LOGGING REQUEST...</span>
+                                </>
+                            ) : (
+                                'CONFIRM PROTOCOL'
+                            )}
                         </button>
                     </form>
                 </div>

@@ -162,9 +162,14 @@ export default function RegistrationModal({ isOpen, onClose, ticket, onComplete 
 
                                 <button
                                     type="submit"
-                                    className="btn btn-primary w-full h-16 text-xs font-black tracking-[0.4em] uppercase shadow-2xl shadow-primary-copper/20 flex items-center justify-center gap-3 italic"
+                                    disabled={state === ModalState.PROCESSING}
+                                    className="btn btn-primary w-full h-16 text-xs font-black tracking-[0.4em] uppercase shadow-2xl shadow-primary-copper/20 flex items-center justify-center gap-3 italic disabled:opacity-50"
                                 >
-                                    GET MY TICKET
+                                    {state === ModalState.PROCESSING ? (
+                                        <Loader2 size={20} className="animate-spin" />
+                                    ) : (
+                                        'GET MY TICKET'
+                                    )}
                                 </button>
                             </form>
                         </div>

@@ -1,6 +1,6 @@
 "use client";
 import React from 'react';
-import { Check, Sparkle, Zap, Crown, Rocket, Star } from 'lucide-react';
+import { Check, Sparkle, Zap, Crown, Rocket, Star, Loader2 } from 'lucide-react';
 
 const iconMap = {
     'REGULAR': <Sparkle size={20} />,
@@ -15,6 +15,7 @@ const defaultIcon = <Sparkle size={20} />;
 export default function Tickets({ onBuy }) {
     const [categories, setCategories] = React.useState([]);
     const [isLoading, setIsLoading] = React.useState(true);
+    const [loadingTicketId, setLoadingTicketId] = React.useState(null);
 
     React.useEffect(() => {
         async function fetchCategories() {
@@ -112,11 +113,21 @@ export default function Tickets({ onBuy }) {
                                 </div>
 
                                 <button
-                                    onClick={() => active && onBuy(ticket)}
-                                    disabled={!active}
-                                    className={`btn w-full !py-4 transition-all duration-500 ${isPopular && active ? 'btn-primary shadow-lg shadow-primary-copper/20' : 'btn-outline border-white/10 hover:border-white disabled:opacity-50 disabled:cursor-not-allowed'}`}
+                                    onClick={async () => {
+                                        if (active) {
+                                            setLoadingTicketId(ticket.id);
+                                            await onBuy(ticket);
+                                            setLoadingTicketId(null);
+                                        }
+                                    }}
+                                    disabled={!active || loadingTicketId === ticket.id}
+                                    className={`btn w-full !py-4 transition-all duration-500 flex items-center justify-center gap-3 ${isPopular && active ? 'btn-primary shadow-lg shadow-primary-copper/20' : 'btn-outline border-white/10 hover:border-white disabled:opacity-50 disabled:cursor-not-allowed'}`}
                                 >
-                                    <span className="tracking-[0.2em]">{active ? 'GET MY TICKET' : 'Locked'}</span>
+                                    {loadingTicketId === ticket.id ? (
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                    ) : (
+                                        <span className="tracking-[0.2em]">{active ? 'GET MY TICKET' : 'Locked'}</span>
+                                    )}
                                 </button>
 
                                 {/* Decorative Background Accent */}

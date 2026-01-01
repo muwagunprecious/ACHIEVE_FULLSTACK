@@ -229,8 +229,17 @@ export default function NominationPage() {
                             disabled={status === 'SUBMITTING'}
                             className="btn btn-primary w-full h-16 text-sm uppercase tracking-[0.2em] font-bold flex items-center justify-center gap-3 rounded-xl disabled:opacity-50"
                         >
-                            {status === 'SUBMITTING' ? 'TRANSMITTING...' : 'SUBMIT NOMINATION'}
-                            {!status === 'SUBMITTING' && <Send size={18} />}
+                            {status === 'SUBMITTING' ? (
+                                <>
+                                    <Loader2 size={18} className="animate-spin" />
+                                    <span>TRANSMITTING...</span>
+                                </>
+                            ) : (
+                                <>
+                                    <span>SUBMIT NOMINATION</span>
+                                    <Send size={18} />
+                                </>
+                            )}
                         </button>
                         <p className="text-center text-[10px] text-text-muted uppercase tracking-widest mt-4">
                             By submitting, you agree to our terms and privacy policy.

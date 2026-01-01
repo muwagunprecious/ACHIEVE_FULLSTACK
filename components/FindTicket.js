@@ -68,9 +68,16 @@ export default function FindTicket() {
                             <button
                                 type="submit"
                                 disabled={isSearching}
-                                className="btn btn-primary h-16 px-12 text-[11px] font-black tracking-[0.3em] disabled:opacity-50"
+                                className="btn btn-primary h-16 px-12 text-[11px] font-black tracking-[0.3em] disabled:opacity-50 flex items-center justify-center gap-3"
                             >
-                                {isSearching ? 'Verifying...' : 'Retrieve Pass'}
+                                {isSearching ? (
+                                    <>
+                                        <Loader2 size={16} className="animate-spin" />
+                                        <span>VERIFYING...</span>
+                                    </>
+                                ) : (
+                                    'RETRIEVE PASS'
+                                )}
                             </button>
                         </form>
                     </div>

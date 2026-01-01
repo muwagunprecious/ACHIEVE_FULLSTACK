@@ -129,9 +129,11 @@ export default function VotingInterface({ categories, initialNominees }) {
                             <button
                                 type="submit"
                                 disabled={isSubmitting}
-                                className="btn btn-primary h-12 px-6 rounded-xl flex items-center gap-2 font-bold tracking-wider disabled:opacity-50"
+                                className="btn btn-primary h-12 px-6 rounded-xl flex items-center justify-center gap-2 font-bold tracking-wider disabled:opacity-50 min-w-[120px]"
                             >
-                                {isSubmitting ? '...' : (
+                                {isSubmitting ? (
+                                    <Loader2 size={18} className="animate-spin" />
+                                ) : (
                                     <>
                                         VOTE <ArrowRight size={16} />
                                     </>
