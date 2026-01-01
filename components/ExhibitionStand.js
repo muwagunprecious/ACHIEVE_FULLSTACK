@@ -2,16 +2,18 @@
 import React, { useState } from 'react';
 import { Target, Users, Loader2 } from 'lucide-react';
 
-export default function ExhibitionStand({ onBook }) {
+export default function ExhibitionStand() {
     const [isLoading, setIsLoading] = useState(false);
 
-    const handleBook = async () => {
+    const handleBook = () => {
         setIsLoading(true);
-        try {
-            await onBook();
-        } finally {
+        // Open the partner page in a new tab as requested
+        const newWindow = window.open('/partnership', '_blank');
+
+        // Reset loader once the tab is opened (or after a short delay)
+        setTimeout(() => {
             setIsLoading(false);
-        }
+        }, 800);
     };
 
     return (
